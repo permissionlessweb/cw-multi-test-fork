@@ -1,9 +1,8 @@
-use cosmwasm_std::{IbcAcknowledgement, IbcPacket, Storage};
+use cosmwasm_std::{IbcAcknowledgement, IbcPacket, StdResult, Storage};
 use cw_storage_plus::{Index, IndexList, IndexedMap, Map, MultiIndex};
 
 use super::types::*;
 
-use anyhow::Result as AnyResult;
 
 pub const NAMESPACE_IBC: &[u8] = b"ibc-namespace";
 
@@ -55,6 +54,6 @@ pub const RECEIVE_ACK_PACKET_MAP: Map<(String, String, u64), Option<IbcAcknowled
 // channel id, packet_id ==> Packet data
 pub const TIMEOUT_PACKET_MAP: Map<(String, String, u64), bool> = Map::new("timeout_packet");
 
-pub fn load_port_info(storage: &dyn Storage, port_id: String) -> AnyResult<PortInfo> {
+pub fn load_port_info(storage: &dyn Storage, port_id: String) -> StdResult<PortInfo> {
     Ok(PORT_INFO.may_load(storage, port_id)?.unwrap_or_default())
 }

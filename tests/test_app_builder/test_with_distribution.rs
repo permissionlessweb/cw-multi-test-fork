@@ -1,8 +1,8 @@
 use crate::test_app_builder::MyKeeper;
-use cosmwasm_std::{DistributionMsg, Empty};
+use cosmwasm_std::{DistributionMsg, DistributionQuery, Empty};
 use cw_multi_test::{no_init, AppBuilder, Distribution, Executor};
 
-type MyDistributionKeeper = MyKeeper<DistributionMsg, Empty, Empty>;
+type MyDistributionKeeper = MyKeeper<DistributionMsg, DistributionQuery, Empty>;
 
 impl Distribution for MyDistributionKeeper {}
 
@@ -26,7 +26,7 @@ fn building_app_with_custom_distribution_should_work() {
 
     // executing distribution message should return an error defined in custom keeper
     assert_eq!(
-        EXECUTE_MSG,
+        format!("kind: Other, error: {EXECUTE_MSG}"),
         app.execute(
             sender_addr,
             DistributionMsg::SetWithdrawAddress {

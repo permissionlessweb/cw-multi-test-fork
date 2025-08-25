@@ -1,5 +1,4 @@
-use anyhow::Result as AnyResult;
-use cosmwasm_std::{from_json, Api, CustomMsg, CustomQuery, IbcEndpoint, IbcOrder, Storage};
+use cosmwasm_std::{from_json, Api, CustomMsg, CustomQuery, IbcEndpoint, IbcOrder, StdResult, Storage};
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -44,7 +43,7 @@ pub fn create_connection<
 >(
     src_app: &mut App<BankT1, ApiT1, StorageT1, CustomT1, WasmT1, StakingT1, DistrT1, IbcT1, GovT1>,
     dst_app: &mut App<BankT2, ApiT2, StorageT2, CustomT2, WasmT2, StakingT2, DistrT2, IbcT2, GovT2>,
-) -> AnyResult<(String, String)>
+) -> StdResult<(String, String)>
 where
     CustomT1::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT1::QueryT: CustomQuery + DeserializeOwned + 'static,
@@ -124,7 +123,7 @@ pub fn create_channel<
     dst_port: String,
     version: String,
     order: IbcOrder,
-) -> AnyResult<ChannelCreationResult>
+) -> StdResult<ChannelCreationResult>
 where
     CustomT1::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT1::QueryT: CustomQuery + DeserializeOwned + 'static,

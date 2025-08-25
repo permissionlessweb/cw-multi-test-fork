@@ -5,7 +5,6 @@
 //!
 //! Everything in this file is only responsible for building such keys
 //! and is not specific to any kind of storage.
-
 /// Calculates the raw key prefix for a given namespace.
 ///
 /// See <https://github.com/webmaster128/key-namespacing#length-prefixed-keys>

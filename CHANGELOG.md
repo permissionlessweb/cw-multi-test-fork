@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased](https://github.com/permissionlessweb/cw-multi-test-fork/tree/bump/cw3/official-ibc-fork) (2025-08-25)
+
+- bumped core cw crates to v3
+- bumped schemars to 0.8.4
+- replaced anyhow::AnyResult with cosmwasm-std::StdResult
+- iterate Contract trait implementor to have dedicated extension functions for each entrypoint (taken from https://github.com/CosmWasm/cw-multi-test/blob/main/src/contracts.rs#L374)
+- use Uint256 for bank & coin related logic
+- refactored test related to BankQuery::AllBalances
+- removed anyhow crate
+
 ## [v2.1.1](https://github.com/CosmWasm/cw-multi-test/tree/v2.1.1) (2024-08-20)
 
 [Full Changelog](https://github.com/CosmWasm/cw-multi-test/compare/v2.1.0...v2.1.1)

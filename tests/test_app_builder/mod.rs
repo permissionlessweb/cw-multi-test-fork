@@ -1,14 +1,16 @@
-use cosmwasm_std::{Addr, Api, Binary, BlockInfo, CustomMsg, CustomQuery, Querier, Storage};
-use cw_multi_test::error::{bail, AnyResult};
+use cosmwasm_std::{
+    Addr, Api, Binary, BlockInfo, CustomMsg, CustomQuery, Querier, StdError, StdResult, Storage,
+};
 use cw_multi_test::{AppResponse, CosmosRouter, Module};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+// mod test_default;
 mod test_with_api;
 mod test_with_bank;
 mod test_with_block;
-#[cfg(feature = "staking")]
+#[cfg(all(feature = "cosmwasm_1_3", feature = "staking"))]
 mod test_with_distribution;
 #[cfg(feature = "stargate")]
 mod test_with_gov;
@@ -53,12 +55,12 @@ where
         _block: &BlockInfo,
         _sender: Addr,
         _msg: Self::ExecT,
-    ) -> AnyResult<AppResponse>
+    ) -> StdResult<AppResponse>
     where
         ExecC: CustomMsg + DeserializeOwned + 'static,
         QueryC: CustomQuery + DeserializeOwned + 'static,
     {
-        bail!(self.1);
+        Err(StdError::msg(self.1))
     }
 
     fn query(
@@ -68,8 +70,8 @@ where
         _querier: &dyn Querier,
         _block: &BlockInfo,
         _request: Self::QueryT,
-    ) -> AnyResult<Binary> {
-        bail!(self.2);
+    ) -> StdResult<Binary> {
+        Err(StdError::msg(self.2))
     }
 
     fn sudo<ExecC, QueryC>(
@@ -79,11 +81,11 @@ where
         _router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
         _block: &BlockInfo,
         _msg: Self::SudoT,
-    ) -> AnyResult<AppResponse>
+    ) -> StdResult<AppResponse>
     where
         ExecC: CustomMsg + DeserializeOwned + 'static,
         QueryC: CustomQuery + DeserializeOwned + 'static,
     {
-        bail!(self.3);
+        Err(StdError::msg(self.3))
     }
 }

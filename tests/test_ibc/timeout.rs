@@ -1,6 +1,7 @@
 use cosmwasm_std::{
-    coin, from_json, testing::MockApi, to_json_binary, Addr, AllBalanceResponse, BankQuery,
-    CosmosMsg, Empty, IbcMsg, IbcOrder, IbcTimeout, IbcTimeoutBlock, Querier, QueryRequest,
+    coin, from_json, testing::MockApi, to_json_binary, Addr, BalanceResponse, BankQuery, CosmosMsg,
+    Empty, IbcMsg, IbcOrder, IbcTimeout, IbcTimeoutBlock, Querier, QueryRequest, StdResult,
+    Uint256,
 };
 
 use cw_multi_test::{
@@ -17,7 +18,7 @@ use cw_multi_test::{
 };
 
 #[test]
-fn simple_transfer_timeout() -> anyhow::Result<()> {
+fn simple_transfer_timeout() -> StdResult<()> {
     let funds = coin(100_000, "ufund");
 
     let mut app1 = AppBuilder::default()
@@ -76,15 +77,16 @@ fn simple_transfer_timeout() -> anyhow::Result<()> {
     // We make sure the balance of the sender hasn't changed in the process
     let balances = app1
         .raw_query(
-            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::AllBalances {
+            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::Balance {
                 address: fund_owner.to_string(),
+                denom: funds.denom.to_string(),
             }))?
             .as_slice(),
         )
         .into_result()?
         .unwrap();
-    let balances: AllBalanceResponse = from_json(balances)?;
-    assert!(balances.amount.is_empty());
+    let balances: BalanceResponse = from_json(balances)?;
+    assert_eq!(balances.amount.amount, Uint256::zero());
 
     // We relaying all packets found in the transaction
     let resp = relay_packets_in_tx(&mut app1, &mut app2, send_response)?;
@@ -99,38 +101,39 @@ fn simple_transfer_timeout() -> anyhow::Result<()> {
     // We make sure the balance of the recipient has not changed
     let balances = app2
         .raw_query(
-            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::AllBalances {
+            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::Balance {
                 address: fund_recipient.to_string(),
+                denom: funds.denom.to_string(),
             }))?
             .as_slice(),
         )
         .into_result()?
         .unwrap();
-    let balances: AllBalanceResponse = from_json(balances)?;
+    let balances: BalanceResponse = from_json(balances)?;
 
     // The recipient has exactly no balance, because it has timed out
-    assert_eq!(balances.amount.len(), 0);
+    assert_eq!(balances.amount.amount, Uint256::new(0u128));
 
     // We make sure the balance of the sender hasn't changed in the process
     let balances = app1
         .raw_query(
-            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::AllBalances {
+            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::Balance {
                 address: fund_owner.to_string(),
+                denom: funds.denom.to_string(),
             }))?
             .as_slice(),
         )
         .into_result()?
         .unwrap();
-    let balances: AllBalanceResponse = from_json(balances)?;
+    let balances: BalanceResponse = from_json(balances)?;
     println!("{:?}", balances);
-    assert_eq!(balances.amount.len(), 1);
-    assert_eq!(balances.amount[0].amount, funds.amount);
-    assert_eq!(balances.amount[0].denom, funds.denom);
+    assert_eq!(balances.amount.amount, funds.amount);
+    assert_eq!(balances.amount.denom, funds.denom);
     Ok(())
 }
 
 #[test]
-fn simple_transfer_timeout_closes_channel() -> anyhow::Result<()> {
+fn simple_transfer_timeout_closes_channel() -> StdResult<()> {
     let funds = coin(100_000, "ufund");
 
     let mut app1 = AppBuilder::default()

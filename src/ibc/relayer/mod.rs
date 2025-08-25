@@ -23,7 +23,7 @@ pub fn get_event_attr_value(
         }
     }
 
-    Err(StdError::generic_err(format!(
+    Err(StdError::msg(format!(
         "event of type {event_type} does not have a value at key {attr_key}"
     )))
 }

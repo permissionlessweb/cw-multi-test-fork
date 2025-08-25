@@ -1,6 +1,6 @@
 use crate::bank::{Bank, BankKeeper, BankSudo};
 use crate::contracts::Contract;
-use crate::error::{bail, AnyResult};
+use crate::error::std_error_bail;
 use crate::executor::{AppResponse, Executor};
 use crate::featured::staking::{
     Distribution, DistributionKeeper, StakeKeeper, Staking, StakingSudo,
@@ -22,7 +22,7 @@ use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
     from_json, to_json_binary, Addr, Api, Binary, BlockInfo, ContractResult, CosmosMsg, CustomMsg,
     CustomQuery, Empty, IbcSourceCallbackMsg, Querier, QuerierResult, QuerierWrapper, QueryRequest,
-    Record, Storage, SystemError, SystemResult,
+    Record, StdResult, Storage, SystemError, SystemResult,
 };
 use cw20_ics20::ibc::Ics20Packet;
 use serde::{de::DeserializeOwned, Serialize};
@@ -175,7 +175,7 @@ where
     GovT: Gov,
     StargateT: Stargate,
 {
-    fn execute(&mut self, sender: Addr, msg: CosmosMsg<CustomT::ExecT>) -> AnyResult<AppResponse> {
+    fn execute(&mut self, sender: Addr, msg: CosmosMsg<CustomT::ExecT>) -> StdResult<AppResponse> {
         let mut all = self.execute_multi(sender, vec![msg])?;
         let res = all.pop().unwrap();
         Ok(res)
@@ -286,7 +286,7 @@ where
         creator: Addr,
         code_id: u64,
         code: Box<dyn Contract<CustomT::ExecT, CustomT::QueryT>>,
-    ) -> AnyResult<u64> {
+    ) -> StdResult<u64> {
         self.router.wasm.store_code_with_id(creator, code_id, code)
     }
 
@@ -297,14 +297,14 @@ where
     ///
     /// ```
     /// use cosmwasm_std::Addr;
-    /// use cw_multi_test::App;
+    /// use abstract_cw_multi_test::App;
     ///
     /// // contract implementation
     /// mod echo {
     ///   // contract entry points not shown here
     /// #  use cosmwasm_std::{Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError, SubMsg, WasmMsg};
     /// #  use serde::{Deserialize, Serialize};
-    /// #  use cw_multi_test::{Contract, ContractWrapper};
+    /// #  use abstract_cw_multi_test::{Contract, ContractWrapper};
     /// #
     /// #  fn instantiate(_: DepsMut, _: Env, _: MessageInfo, _: Empty) -> Result<Response, StdError> {
     /// #    unimplemented!()
@@ -333,17 +333,17 @@ where
     /// assert_ne!(code_id, app.duplicate_code(code_id).unwrap());
     ///
     /// // zero is an invalid identifier for contract code, returns an error
-    /// assert_eq!("code id: invalid", app.duplicate_code(0).unwrap_err().to_string());
+    /// assert_eq!("kind: Other, error: code id: invalid", app.duplicate_code(0).unwrap_err().to_string());
     ///
     /// // there is no contract code with identifier 100 stored yet, returns an error
-    /// assert_eq!("code id 100: no such code", app.duplicate_code(100).unwrap_err().to_string());
+    /// assert_eq!("kind: Other, error: code id 100: no such code", app.duplicate_code(100).unwrap_err().to_string());
     /// ```
-    pub fn duplicate_code(&mut self, code_id: u64) -> AnyResult<u64> {
+    pub fn duplicate_code(&mut self, code_id: u64) -> StdResult<u64> {
         self.router.wasm.duplicate_code(code_id)
     }
 
     /// Returns `ContractData` for the contract with specified address.
-    pub fn contract_data(&self, address: &Addr) -> AnyResult<ContractData> {
+    pub fn contract_data(&self, address: &Addr) -> StdResult<ContractData> {
         self.router.wasm.contract_data(&self.storage, address)
     }
 
@@ -434,7 +434,7 @@ where
 
     /// Simple helper so we get access to all the QuerierWrapper helpers,
     /// e.g. wrap().query_wasm_smart, query_all_balances, ...
-    pub fn wrap(&self) -> QuerierWrapper<CustomT::QueryT> {
+    pub fn wrap(&self) -> QuerierWrapper<'_, CustomT::QueryT> {
         QuerierWrapper::new(self)
     }
 
@@ -445,7 +445,7 @@ where
         &mut self,
         sender: Addr,
         msgs: Vec<CosmosMsg<CustomT::ExecT>>,
-    ) -> AnyResult<Vec<AppResponse>> {
+    ) -> StdResult<Vec<AppResponse>> {
         // we need to do some caching of storage here, once in the entry point:
         // meaning, wrap current state, all writes go to a cache, only when execute
         // returns a success do we flush it (otherwise drop it)
@@ -471,7 +471,7 @@ where
         &mut self,
         contract_addr: U,
         msg: &T,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         let msg = WasmSudo {
             contract_addr: contract_addr.into(),
             message: to_json_binary(msg)?,
@@ -490,7 +490,7 @@ where
     }
 
     /// Queries the IBC module
-    pub fn ibc_query(&self, query: MockIbcQuery) -> AnyResult<Binary> {
+    pub fn ibc_query(&self, query: MockIbcQuery) -> StdResult<Binary> {
         let Self {
             block,
             router,
@@ -506,7 +506,7 @@ where
     /// Runs arbitrary SudoMsg.
     /// This will create a cache before the execution, so no state changes are persisted if this
     /// returns an error, but all are persisted on success.
-    pub fn sudo(&mut self, msg: SudoMsg) -> AnyResult<AppResponse> {
+    pub fn sudo(&mut self, msg: SudoMsg) -> StdResult<AppResponse> {
         // we need to do some caching of storage here, once in the entry point:
         // meaning, wrap current state, all writes go to a cache, only when execute
         // returns a success do we flush it (otherwise drop it)
@@ -639,7 +639,7 @@ pub trait CosmosRouter {
         block: &BlockInfo,
         sender: Addr,
         msg: CosmosMsg<Self::ExecC>,
-    ) -> AnyResult<AppResponse>;
+    ) -> StdResult<AppResponse>;
 
     /// Evaluates queries.
     fn query(
@@ -648,7 +648,7 @@ pub trait CosmosRouter {
         storage: &dyn Storage,
         block: &BlockInfo,
         request: QueryRequest<Self::QueryC>,
-    ) -> AnyResult<Binary>;
+    ) -> StdResult<Binary>;
 
     /// Evaluates privileged actions.
     fn sudo(
@@ -657,7 +657,7 @@ pub trait CosmosRouter {
         storage: &mut dyn Storage,
         block: &BlockInfo,
         msg: SudoMsg,
-    ) -> AnyResult<AppResponse>;
+    ) -> StdResult<AppResponse>;
 
     /// Evaluates all ibc related actions
     fn ibc(
@@ -666,7 +666,7 @@ pub trait CosmosRouter {
         storage: &mut dyn Storage,
         block: &BlockInfo,
         msg: IbcRouterMsg,
-    ) -> AnyResult<IbcResponse>;
+    ) -> StdResult<IbcResponse>;
 
     /// Evaluates ibc_source_callback related actions
     fn ibc_source_callback(
@@ -675,8 +675,8 @@ pub trait CosmosRouter {
         _storage: &mut dyn Storage,
         _block: &BlockInfo,
         _msg: IbcSourceCallbackMsg,
-    ) -> AnyResult<IbcResponse> {
-        bail!("No ibc source callback implemented")
+    ) -> StdResult<IbcResponse> {
+        std_error_bail!("No ibc source callback implemented")
     }
 }
 
@@ -704,7 +704,7 @@ where
         block: &BlockInfo,
         sender: Addr,
         msg: CosmosMsg<Self::ExecC>,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         match msg {
             CosmosMsg::Wasm(msg) => self.wasm.execute(api, storage, self, block, sender, msg),
             CosmosMsg::Bank(msg) => self.bank.execute(api, storage, self, block, sender, msg),
@@ -728,7 +728,7 @@ where
             CosmosMsg::Any(msg) => self
                 .stargate
                 .execute_any(api, storage, self, block, sender, msg),
-            _ => bail!("Cannot execute {:?}", msg),
+            _ => std_error_bail!("Cannot execute {:?}", msg),
         }
     }
 
@@ -741,7 +741,7 @@ where
         storage: &dyn Storage,
         block: &BlockInfo,
         request: QueryRequest<Self::QueryC>,
-    ) -> AnyResult<Binary> {
+    ) -> StdResult<Binary> {
         let querier = self.querier(api, storage, block);
         match request {
             QueryRequest::Wasm(req) => self.wasm.query(api, storage, &querier, block, req),
@@ -767,7 +767,7 @@ where
         storage: &mut dyn Storage,
         block: &BlockInfo,
         msg: SudoMsg,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         match msg {
             SudoMsg::Wasm(msg) => self.wasm.sudo(api, storage, self, block, msg),
             SudoMsg::Bank(msg) => self.bank.sudo(api, storage, self, block, msg),
@@ -785,7 +785,7 @@ where
         storage: &mut dyn Storage,
         block: &BlockInfo,
         msg: IbcRouterMsg,
-    ) -> AnyResult<IbcResponse> {
+    ) -> StdResult<IbcResponse> {
         match msg.module {
             IbcModule::Bank => match msg.msg {
                 IbcModuleMsg::ChannelOpen(m) => self
@@ -875,7 +875,7 @@ where
         storage: &mut dyn Storage,
         block: &BlockInfo,
         msg: IbcSourceCallbackMsg,
-    ) -> AnyResult<IbcResponse> {
+    ) -> StdResult<IbcResponse> {
         let (module_port, packet): (IbcModule, _) = match &msg {
             IbcSourceCallbackMsg::Acknowledgement(ibc_ack_callback_msg) => {
                 let module_port: MockIbcPort =
@@ -895,7 +895,7 @@ where
         // For now, only the Bank module has a middleware registered with `wasm` being the contract keeper
         match module_port {
             IbcModule::Wasm(_) => {
-                bail!("No callback middleware for wasm in cw-multi-test")
+                std_error_bail!("No callback middleware for wasm in cw-multi-test")
             }
             IbcModule::Bank => {
                 // If it's a message sent by the bank module, it must have the ICS20 format
@@ -912,11 +912,14 @@ where
                     )
                     .map(Into::into)
             }
-            IbcModule::Staking => bail!("No callback middleware for staking in cw-multi-test"),
+            IbcModule::Staking => {
+                std_error_bail!("No callback middleware for staking in cw-multi-test")
+            }
         }
     }
 }
 
+/// MockRouter
 pub struct MockRouter<ExecC, QueryC>(PhantomData<(ExecC, QueryC)>);
 
 impl Default for MockRouter<Empty, Empty> {
@@ -926,6 +929,7 @@ impl Default for MockRouter<Empty, Empty> {
 }
 
 impl<ExecC, QueryC> MockRouter<ExecC, QueryC> {
+    /// Creates a new [MockRouter].
     pub fn new() -> Self
     where
         QueryC: CustomQuery,
@@ -949,7 +953,7 @@ where
         _block: &BlockInfo,
         _sender: Addr,
         _msg: CosmosMsg<Self::ExecC>,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         panic!("Cannot execute MockRouters");
     }
 
@@ -959,7 +963,7 @@ where
         _storage: &dyn Storage,
         _block: &BlockInfo,
         _request: QueryRequest<Self::QueryC>,
-    ) -> AnyResult<Binary> {
+    ) -> StdResult<Binary> {
         panic!("Cannot query MockRouters");
     }
 
@@ -969,17 +973,16 @@ where
         _storage: &mut dyn Storage,
         _block: &BlockInfo,
         _msg: SudoMsg,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         panic!("Cannot sudo MockRouters");
     }
-
     fn ibc(
         &self,
         _api: &dyn Api,
         _storage: &mut dyn Storage,
         _block: &BlockInfo,
         _msg: IbcRouterMsg,
-    ) -> AnyResult<IbcResponse> {
+    ) -> StdResult<IbcResponse> {
         panic!("Cannot ibc MockRouters");
     }
 }
@@ -1017,7 +1020,7 @@ where
             Ok(v) => v,
             Err(e) => {
                 return SystemResult::Err(SystemError::InvalidRequest {
-                    error: format!("Parsing query request: {}", e),
+                    error: format!("Parsing query request: {e}"),
                     request: bin_request.into(),
                 })
             }

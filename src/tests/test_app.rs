@@ -1,5 +1,4 @@
 use crate::custom_handler::CachingCustomHandler;
-use crate::error::{bail, AnyResult};
 use crate::featured::staking::{Distribution, Staking};
 use crate::test_helpers::echo::EXECUTE_REPLY_BASE_ID;
 use crate::test_helpers::{caller, echo, error, hackatom, payout, reflect, CustomHelperMsg};
@@ -12,23 +11,21 @@ use crate::{
 use crate::{AppBuilder, IntoAddr};
 use cosmwasm_std::testing::{mock_env, MockQuerier};
 use cosmwasm_std::{
-    coin, coins, from_json, to_json_binary, Addr, AllBalanceResponse, Api, Attribute, BankMsg,
-    BankQuery, Binary, BlockInfo, Coin, CosmosMsg, CustomMsg, CustomQuery, Empty, Event,
-    OverflowError, OverflowOperation, Querier, Reply, StdError, StdResult, Storage, SubMsg,
-    WasmMsg,
+    coin, coins, from_json, to_json_binary, Addr, Api, Attribute, BalanceResponse, BankMsg,
+    BankQuery, Binary, BlockInfo, Coin, CosmosMsg, CustomMsg, CustomQuery, Empty, Event, Querier,
+    Reply, StdResult, Storage, SubMsg, WasmMsg,
 };
 use cw_storage_plus::Item;
 use cw_utils::parse_instantiate_response_data;
-use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 
-/// Utility function that returns all balances for specified address.
+/// Utility function that returns the balance for a specified address & token.
+/// V3.0.0: BankQuery::AllBalances was removed, destroying this function.
 fn get_balance<BankT, ApiT, StorageT, CustomT, WasmT>(
     app: &App<BankT, ApiT, StorageT, CustomT, WasmT>,
-    addr: &Addr,
-) -> Vec<Coin>
+    address: &Addr,
+    denom: &str,
+) -> Coin
 where
     CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
@@ -38,7 +35,7 @@ where
     StorageT: Storage,
     CustomT: Module,
 {
-    app.wrap().query_all_balances(addr).unwrap()
+    app.wrap().query_balance(address, denom).unwrap()
 }
 
 fn query_router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>(
@@ -46,7 +43,8 @@ fn query_router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>(
     api: &dyn Api,
     storage: &dyn Storage,
     rcpt: &Addr,
-) -> Vec<Coin>
+    denom: &str,
+) -> Coin
 where
     CustomT::ExecT: CustomMsg,
     CustomT::QueryT: CustomQuery + DeserializeOwned,
@@ -56,8 +54,9 @@ where
     StakingT: Staking,
     DistrT: Distribution,
 {
-    let query = BankQuery::AllBalances {
+    let query = BankQuery::Balance {
         address: rcpt.into(),
+        denom: denom.to_string(),
     };
     let block = mock_env().block;
     let querier: MockQuerier<CustomT::QueryT> = MockQuerier::new(&[]);
@@ -65,14 +64,15 @@ where
         .bank
         .query(api, storage, &querier, &block, query)
         .unwrap();
-    let val: AllBalanceResponse = from_json(res).unwrap();
+    let val: BalanceResponse = from_json(res).unwrap();
     val.amount
 }
 
 fn query_app<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT>(
     app: &App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT>,
     rcpt: &Addr,
-) -> Vec<Coin>
+    denom: &str,
+) -> Coin
 where
     CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
@@ -84,11 +84,12 @@ where
     StakingT: Staking,
     DistrT: Distribution,
 {
-    let query = BankQuery::AllBalances {
+    let query = BankQuery::Balance {
         address: rcpt.into(),
+        denom: denom.to_string(),
     }
     .into();
-    let val: AllBalanceResponse = app.wrap().query(&query).unwrap();
+    let val: BalanceResponse = app.wrap().query(&query).unwrap();
     val.amount
 }
 
@@ -138,10 +139,11 @@ fn multi_level_bank_cache() {
         .unwrap();
 
     // shows up in cache
-    let cached_rcpt = query_router(app.router(), app.api(), &cache, &recipient_addr);
-    assert_eq!(coins(25, "eth"), cached_rcpt);
-    let router_rcpt = query_app(&app, &recipient_addr);
-    assert_eq!(router_rcpt, vec![]);
+    assert_eq!(
+        coin(25, "eth"),
+        query_router(app.router(), app.api(), &cache, &recipient_addr, "eth")
+    );
+    assert_eq!(coin(0, "eth"), query_app(&app, &recipient_addr, "eth"));
 
     // now, second level cache
     transactional(&mut cache, |cache2, read| {
@@ -154,10 +156,14 @@ fn multi_level_bank_cache() {
             .unwrap();
 
         // shows up in 2nd cache
-        let cached_rcpt = query_router(app.router(), app.api(), read, &recipient_addr);
-        assert_eq!(coins(25, "eth"), cached_rcpt);
-        let cached2_rcpt = query_router(app.router(), app.api(), cache2, &recipient_addr);
-        assert_eq!(coins(37, "eth"), cached2_rcpt);
+        assert_eq!(
+            coin(25, "eth"),
+            query_router(app.router(), app.api(), read, &recipient_addr, "eth")
+        );
+        assert_eq!(
+            coin(37, "eth"),
+            query_router(app.router(), app.api(), cache2, &recipient_addr, "eth")
+        );
         Ok(())
     })
     .unwrap();
@@ -165,8 +171,7 @@ fn multi_level_bank_cache() {
     // apply first to router
     cache.prepare().commit(app.storage_mut());
 
-    let committed = query_app(&app, &recipient_addr);
-    assert_eq!(coins(37, "eth"), committed);
+    assert_eq!(coin(37, "eth"), query_app(&app, &recipient_addr, "eth"));
 }
 
 #[test]
@@ -219,10 +224,10 @@ fn send_tokens() {
     }
     .into();
     app.execute(owner_addr.clone(), msg.clone()).unwrap();
-    let rich = get_balance(&app, &owner_addr);
-    assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
-    let poor = get_balance(&app, &recipient_addr);
-    assert_eq!(vec![coin(10, "btc"), coin(30, "eth")], poor);
+    assert_eq!(coin(15, "btc"), get_balance(&app, &owner_addr, "btc"));
+    assert_eq!(coin(70, "eth"), get_balance(&app, &owner_addr, "eth"));
+    assert_eq!(coin(10, "btc"), get_balance(&app, &recipient_addr, "btc"));
+    assert_eq!(coin(30, "eth"), get_balance(&app, &recipient_addr, "eth"));
 
     // can send from other account (but funds will be deducted from sender)
     app.execute(recipient_addr.clone(), msg).unwrap();
@@ -235,8 +240,8 @@ fn send_tokens() {
     .into();
     app.execute(owner_addr.clone(), msg).unwrap_err();
 
-    let rich = get_balance(&app, &owner_addr);
-    assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
+    assert_eq!(coin(15, "btc"), get_balance(&app, &owner_addr, "btc"));
+    assert_eq!(coin(70, "eth"), get_balance(&app, &owner_addr, "eth"));
 }
 
 #[test]
@@ -283,16 +288,15 @@ fn simple_contract() {
     );
 
     // sender funds deducted
-    let sender = get_balance(&app, &owner_addr);
-    assert_eq!(sender, vec![coin(20, "btc"), coin(77, "eth")]);
+    assert_eq!(coin(20, "btc"), get_balance(&app, &owner_addr, "btc"));
+    assert_eq!(coin(77, "eth"), get_balance(&app, &owner_addr, "eth"));
     // get contract address, has funds
-    let funds = get_balance(&app, &contract_addr);
-    assert_eq!(funds, coins(23, "eth"));
+    assert_eq!(coin(23, "eth"), get_balance(&app, &contract_addr, "eth"));
 
     // create empty account
     let random_addr = app.api().addr_make("random");
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, vec![]);
+    assert_eq!(coin(0, "btc"), get_balance(&app, &random_addr, "btc"));
+    assert_eq!(coin(0, "eth"), get_balance(&app, &random_addr, "eth"));
 
     // do one payout and see money coming in
     let res = app
@@ -320,11 +324,9 @@ fn simple_contract() {
     assert_eq!(&expected_transfer, &res.events[2]);
 
     // random got cash
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, coins(5, "eth"));
+    assert_eq!(coin(5, "eth"), get_balance(&app, &random_addr, "eth"));
     // contract lost it
-    let funds = get_balance(&app, &contract_addr);
-    assert_eq!(funds, coins(18, "eth"));
+    assert_eq!(coin(18, "eth"), get_balance(&app, &contract_addr, "eth"));
 }
 
 #[test]
@@ -367,8 +369,8 @@ fn reflect_success() {
         .unwrap();
 
     // reflect account is empty
-    let funds = get_balance(&app, &reflect_addr);
-    assert_eq!(funds, vec![]);
+    assert_eq!(coin(0, "btc"), get_balance(&app, &reflect_addr, "btc"));
+    assert_eq!(coin(0, "eth"), get_balance(&app, &reflect_addr, "eth"));
     // reflect count is 1
     let query_res: payout::CountResponse = app
         .wrap()
@@ -422,8 +424,7 @@ fn reflect_success() {
     assert_eq!(second.attributes[2], ("amount", "5eth"));
 
     // ensure transfer was executed with reflect as sender
-    let funds = get_balance(&app, &reflect_addr);
-    assert_eq!(funds, coins(5, "eth"));
+    assert_eq!(coin(5, "eth"), get_balance(&app, &reflect_addr, "eth"));
 
     // reflect count updated
     let query_res: payout::CountResponse = app
@@ -462,8 +463,7 @@ fn reflect_error() {
         .unwrap();
 
     // reflect has 40 eth
-    let funds = get_balance(&app, &reflect_addr);
-    assert_eq!(funds, coins(40, "eth"));
+    assert_eq!(coin(40, "eth"), get_balance(&app, &reflect_addr, "eth"));
     let random_addr = app.api().addr_make("random");
 
     // sending 7 eth works
@@ -486,8 +486,7 @@ fn reflect_error() {
     assert_eq!(transfer.ty.as_str(), "transfer");
 
     // ensure random got paid
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, coins(7, "eth"));
+    assert_eq!(coin(7, "eth"), get_balance(&app, &random_addr, "eth"));
 
     // reflect count should be updated to 1
     let query_res: payout::CountResponse = app
@@ -511,14 +510,15 @@ fn reflect_error() {
     let err = app
         .execute_contract(random_addr.clone(), reflect_addr.clone(), &msgs, &[])
         .unwrap_err();
-    assert_eq!(
-        StdError::overflow(OverflowError::new(OverflowOperation::Sub)),
-        err.downcast().unwrap()
+
+    let err_str = err.to_string();
+    assert!(
+        err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+            && err_str.contains("Cannot Sub with given operands")
     );
 
     // first one should have been rolled-back on error (no second payment)
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, coins(7, "eth"));
+    assert_eq!(coin(7, "eth"), get_balance(&app, &random_addr, "eth"));
 
     // failure should not update reflect count
     let query_res: payout::CountResponse = app
@@ -862,23 +862,25 @@ fn sent_funds_properly_visible_on_execution() {
     )
     .unwrap();
 
-    // Check balance of all accounts to ensure no tokens where burned or created, and they are
-    // in correct places
-    assert_eq!(get_balance(&app, &owner_addr), &[]);
-    assert_eq!(get_balance(&app, &contract), &[]);
-    assert_eq!(get_balance(&app, &beneficiary_addr), coins(30, "btc"));
+    // Check balance of all accounts to ensure no tokens where burned or created,
+    // and they are in correct places
+    assert_eq!(get_balance(&app, &owner_addr, "btc"), coin(0, "btc"));
+    assert_eq!(get_balance(&app, &contract, "btc"), coin(0, "btc"));
+    assert_eq!(get_balance(&app, &beneficiary_addr, "btc"), coin(30, "btc"));
 }
 
 /// Demonstrates that we can mint tokens and send from other accounts
 /// via a custom module, as an example of ability to do privileged actions.
 mod custom_handler {
+
     use super::*;
+    use crate::error::std_error_bail;
     use crate::{BankSudo, BasicAppBuilder};
 
     const LOTTERY: Item<Coin> = Item::new("lottery");
     const PITY: Item<Coin> = Item::new("pity");
 
-    #[derive(Clone, Debug, PartialEq, JsonSchema, Serialize, Deserialize)]
+    #[cosmwasm_schema::cw_serde]
     struct CustomLotteryMsg {
         // we mint LOTTERY tokens to this one
         lucky_winner: String,
@@ -903,7 +905,7 @@ mod custom_handler {
             block: &BlockInfo,
             _sender: Addr,
             msg: Self::ExecT,
-        ) -> AnyResult<AppResponse>
+        ) -> StdResult<AppResponse>
         where
             ExecC: CustomMsg + DeserializeOwned + 'static,
             QueryC: CustomQuery + DeserializeOwned + 'static,
@@ -936,8 +938,8 @@ mod custom_handler {
             _querier: &dyn Querier,
             _block: &BlockInfo,
             _request: Self::QueryT,
-        ) -> AnyResult<Binary> {
-            bail!("query not implemented for CustomHandler")
+        ) -> StdResult<Binary> {
+            std_error_bail!("query not implemented for CustomHandler")
         }
 
         fn sudo<ExecC, QueryC>(
@@ -947,12 +949,12 @@ mod custom_handler {
             _router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
             _block: &BlockInfo,
             _msg: Self::SudoT,
-        ) -> AnyResult<AppResponse>
+        ) -> StdResult<AppResponse>
         where
             ExecC: CustomMsg + DeserializeOwned + 'static,
             QueryC: CustomQuery + DeserializeOwned + 'static,
         {
-            bail!("sudo not implemented for CustomHandler")
+            std_error_bail!("sudo not implemented for CustomHandler")
         }
     }
 
@@ -963,7 +965,7 @@ mod custom_handler {
             storage: &mut dyn Storage,
             lottery: Coin,
             pity: Coin,
-        ) -> AnyResult<()> {
+        ) -> StdResult<()> {
             LOTTERY.save(storage, &lottery)?;
             PITY.save(storage, &pity)?;
             Ok(())
@@ -1078,7 +1080,6 @@ mod reply_data_overwrite {
 
         // the returned data should be the same as the one being previously sent
         assert_eq!(response.data, Some(b"PAYLOAD".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
     }
 
     #[test]
@@ -1116,7 +1117,6 @@ mod reply_data_overwrite {
 
         // the returned data should be the data payload of the submessage
         assert_eq!(response.data, Some(b"SECOND".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
     }
 
     #[test]
@@ -1153,7 +1153,6 @@ mod reply_data_overwrite {
 
         // the returned data should be the data payload of the original message
         assert_eq!(response.data, Some(b"FIRST".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
     }
 
     #[test]
@@ -1187,7 +1186,6 @@ mod reply_data_overwrite {
             .unwrap();
 
         assert_eq!(response.data, Some(b"FIRST".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
     }
 
     #[test]
@@ -1219,7 +1217,6 @@ mod reply_data_overwrite {
             .unwrap();
 
         assert_eq!(response.data, Some(b"SECOND".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
     }
 
     #[test]
@@ -1279,7 +1276,6 @@ mod reply_data_overwrite {
 
         // ensure the data in response is empty
         assert_eq!(response.data, None);
-        //TODO assert_eq!(response.msg_responses, vec![]);
         // ensure expected events are returned
         assert_eq!(response.events.len(), 2);
         let make_event = |contract_addr: &Addr| {
@@ -1342,7 +1338,6 @@ mod reply_data_overwrite {
             .unwrap();
 
         assert_eq!(response.data, Some(b"SECOND".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
     }
 
     #[test]
@@ -1362,11 +1357,11 @@ mod reply_data_overwrite {
                 owner,
                 contract.clone(),
                 &echo::ExecMessage {
-                    data: Some("Orig".to_owned()),
+                    data: "ORIGINAL".to_string().into(),
                     sub_msg: vec![
                         make_echo_reply_never_submsg(contract.clone(), None, vec![]),
-                        make_echo_reply_never_submsg(contract.clone(), "First", vec![]),
-                        make_echo_reply_never_submsg(contract.clone(), "Second", vec![]),
+                        make_echo_reply_never_submsg(contract.clone(), "FIRST", vec![]),
+                        make_echo_reply_never_submsg(contract.clone(), "SECOND", vec![]),
                         make_echo_reply_never_submsg(contract, None, vec![]),
                     ],
                     ..Default::default()
@@ -1375,8 +1370,7 @@ mod reply_data_overwrite {
             )
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Orig".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
+        assert_eq!(response.data, Some(b"ORIGINAL".into()));
     }
 
     #[test]
@@ -1425,7 +1419,6 @@ mod reply_data_overwrite {
             .unwrap();
 
         assert_eq!(response.data, Some(b"SECOND".into()));
-        //TODO assert_eq!(response.msg_responses, vec![]);
     }
 
     #[test]
@@ -1474,13 +1467,11 @@ mod reply_data_overwrite {
             .unwrap();
 
         assert_eq!(response.data, Some(b"SECOND".into()));
-        //assert_eq!(response.msg_responses, vec![]);
     }
 }
 
 mod response_validation {
     use super::*;
-    use crate::error::Error;
 
     #[test]
     fn empty_attribute_key() {
@@ -1510,7 +1501,11 @@ mod response_validation {
             )
             .unwrap_err();
 
-        assert_eq!(Error::empty_attribute_key("value"), err.downcast().unwrap(),);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Empty attribute key. Value: value")
+        );
     }
 
     #[test]
@@ -1568,7 +1563,11 @@ mod response_validation {
             )
             .unwrap_err();
 
-        assert_eq!(Error::empty_attribute_key("value"), err.downcast().unwrap());
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Empty attribute key. Value: value")
+        );
     }
 
     #[test]
@@ -1623,7 +1622,11 @@ mod response_validation {
             )
             .unwrap_err();
 
-        assert_eq!(Error::event_type_too_short("e"), err.downcast().unwrap());
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Event type too short: e")
+        );
     }
 }
 
@@ -1689,11 +1692,11 @@ mod wasm_queries {
         use super::*;
         let app = App::default();
         assert_eq!(
-            "Generic error: Querier contract error: code id: invalid",
+            "kind: Other, error: Querier contract error: kind: Other, error: code id: invalid",
             app.wrap().query_wasm_code_info(0).unwrap_err().to_string()
         );
         assert_eq!(
-            "Generic error: Querier contract error: code id 1: no such code",
+            "kind: Other, error: Querier contract error: kind: Other, error: code id 1: no such code",
             app.wrap().query_wasm_code_info(1).unwrap_err().to_string()
         );
     }
@@ -1909,17 +1912,11 @@ mod errors {
             .instantiate_contract(code_id, owner, &msg, &[], "error", None)
             .unwrap_err();
 
-        // we should be able to retrieve the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Init failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 2 nested error types
-        // (the original error, WasmMsg context)
-        assert_eq!(err.chain().count(), 2);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Init failed")
+        );
     }
 
     #[test]
@@ -1942,17 +1939,11 @@ mod errors {
             .execute_contract(random_addr, contract_addr, &msg, &[])
             .unwrap_err();
 
-        // we should be able to retrieve the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Handle failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 2 nested error types
-        // (the original error, WasmMsg context)
-        assert_eq!(err.chain().count(), 2);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Handle failed")
+        );
     }
 
     #[test]
@@ -1984,17 +1975,11 @@ mod errors {
             .execute_contract(random_addr, caller_addr, &msg, &[])
             .unwrap_err();
 
-        // we can get the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Handle failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 3 nested error types
-        // (the original error, 2 WasmMsg contexts)
-        assert_eq!(err.chain().count(), 3);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Handle failed")
+        );
     }
 
     #[test]
@@ -2048,19 +2033,10 @@ mod errors {
             .execute_contract(random_addr, caller_addr1, &msg, &[])
             .unwrap_err();
 
-        // uncomment to have the test fail and see how the error stringifies
-        // panic!("{:?}", err);
-
-        // we can get the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Handle failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 4 nested error types
-        // (the original error, 3 WasmMsg contexts)
-        assert_eq!(err.chain().count(), 4);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Handle failed")
+        );
     }
 }

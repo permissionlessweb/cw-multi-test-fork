@@ -86,35 +86,35 @@ fn reply<C>(_deps: DepsMut, _env: Env, msg: Reply) -> StdResult<Response<C>>
 where
     C: CustomMsg + 'static,
 {
-    let response = Response::new();
+    let mut response = Response::default();
     #[allow(deprecated)]
     if let Reply {
         id,
-        result: SubMsgResult::Ok(SubMsgResponse {
-            data: Some(data), ..
-        }),
+        result:
+            SubMsgResult::Ok(SubMsgResponse {
+                events: _,
+                data: Some(data),
+                msg_responses: _,
+            }),
         ..
     } = msg
     {
         let parsed_data = if id < EXECUTE_REPLY_BASE_ID {
             // parse out the WasmMsg::Execute wrapper for instantiate reply
             parse_instantiate_response_data(data.as_slice())
-                .map_err(|e| StdError::generic_err(e.to_string()))?
+                .map_err(|e| StdError::msg(e.to_string()))?
                 .data
         } else {
             // parse out the WasmMsg::Execute wrapper for execute reply
             parse_execute_response_data(data.as_slice())
-                .map_err(|e| StdError::generic_err(e.to_string()))?
+                .map_err(|e| StdError::msg(e.to_string()))?
                 .data
         };
         if let Some(data) = parsed_data {
-            Ok(response.set_data(data))
-        } else {
-            Ok(response)
+            response = response.set_data(data);
         }
-    } else {
-        Ok(response)
     }
+    Ok(response)
 }
 
 pub fn contract<C>() -> Box<dyn Contract<C>>

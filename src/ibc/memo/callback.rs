@@ -1,8 +1,9 @@
-use anyhow::bail;
-use cosmwasm_std::{Binary, IbcDstCallback, IbcSrcCallback};
+use cosmwasm_std::{Binary, IbcDstCallback, IbcSrcCallback, StdResult};
 use cw20_ics20::ibc::Ics20Packet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use crate::error::std_error_bail;
 
 /// This is copoied from cosmwasm-std because fields are private there
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -14,7 +15,7 @@ pub struct IbcCallbackRequest {
     pub dest_callback: Option<IbcDstCallback>,
 }
 
-pub fn parse_ics20_memo_callback(packet_data: &Binary) -> anyhow::Result<()> {
+pub fn parse_ics20_memo_callback(packet_data: &Binary) -> StdResult<()> {
     if let Ok(packet) = cosmwasm_std::from_json::<Ics20Packet>(&packet_data) {
         if let Ok(callback_request) =
             serde_json::from_str::<IbcCallbackRequest>(&packet.memo.unwrap_or("{}".to_string()))
@@ -25,5 +26,5 @@ pub fn parse_ics20_memo_callback(packet_data: &Binary) -> anyhow::Result<()> {
         }
     }
 
-    bail!("No ics_20_memo callback")
+    std_error_bail!("No ics_20_memo callback")
 }

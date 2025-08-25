@@ -21,7 +21,7 @@ fn building_app_with_custom_gov_should_work() {
 
     // executing governance message should return an error defined in custom keeper
     assert_eq!(
-        EXECUTE_MSG,
+        format!("kind: Other, error: {EXECUTE_MSG}"),
         app.execute(
             sender_addr,
             GovMsg::Vote {

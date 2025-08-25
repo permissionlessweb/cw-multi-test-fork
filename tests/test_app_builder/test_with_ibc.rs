@@ -1,8 +1,6 @@
 use crate::test_app_builder::MyKeeper;
-use cosmwasm_std::{IbcMsg, IbcQuery, QueryRequest};
+use cosmwasm_std::{IbcMsg, IbcQuery, QueryRequest, StdResult};
 use cw_multi_test::{no_init, AppBuilder, BasicApp, Executor, Ibc};
-
-use anyhow::Result as AnyResult;
 use cw_multi_test::ibc::relayer::{create_channel, create_connection};
 use cw_multi_test::ibc::{types::MockIbcQuery, IbcPacketRelayingMsg};
 
@@ -26,7 +24,7 @@ fn building_app_with_custom_ibc_should_work() {
 
     // executing ibc message should return an error defined in custom keeper
     assert_eq!(
-        EXECUTE_MSG,
+        format!("kind: Other, error: {EXECUTE_MSG}"),
         app.execute(
             sender_addr,
             IbcMsg::CloseChannel {
@@ -40,9 +38,10 @@ fn building_app_with_custom_ibc_should_work() {
 
     // executing ibc query should return an error defined in custom keeper
     assert_eq!(
-        format!("Generic error: Querier contract error: {}", QUERY_MSG),
+        format!("kind: Other, error: Querier contract error: kind: Other, error: {QUERY_MSG}"),
         app.wrap()
-            .query::<IbcQuery>(&QueryRequest::Ibc(IbcQuery::ListChannels {
+            .query::<IbcQuery>(&QueryRequest::Ibc(IbcQuery::Channel {
+                channel_id: "our-channel".to_string(),
                 port_id: Some("my-port".to_string())
             }))
             .unwrap_err()
@@ -51,7 +50,7 @@ fn building_app_with_custom_ibc_should_work() {
 }
 
 #[test]
-fn create_channel_should_work_with_basic_app() -> AnyResult<()> {
+fn create_channel_should_work_with_basic_app() -> StdResult<()> {
     let mut app1 = BasicApp::new(no_init);
     let mut app2 = BasicApp::new(no_init);
 
@@ -71,7 +70,7 @@ fn create_channel_should_work_with_basic_app() -> AnyResult<()> {
 }
 
 #[test]
-fn create_channel_should_work_with_failing_keeper() -> AnyResult<()> {
+fn create_channel_should_work_with_failing_keeper() -> StdResult<()> {
     // build custom ibc keeper (no sudo handling for ibc)
     let ibc_keeper1 = MyIbcKeeper::new(EXECUTE_MSG, QUERY_MSG, "no-sudo-message");
     let ibc_keeper2 = MyIbcKeeper::new(EXECUTE_MSG, QUERY_MSG, "no-sudo-message");
