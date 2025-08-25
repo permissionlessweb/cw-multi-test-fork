@@ -590,7 +590,6 @@ where
         );
         Ok(new_code_id)
     }
-
     /// Returns `ContractData` for the contract with specified address.
     fn contract_data(&self, storage: &dyn Storage, address: &Addr) -> StdResult<ContractData> {
         let storage: TypedPrefixedStorage<'_, WasmKeeper<ExecC, QueryC>> =
