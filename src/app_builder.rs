@@ -1,12 +1,13 @@
-//! AppBuilder helps you set up your test blockchain environment step by step [App].
-use crate::featured::staking::{Distribution, DistributionKeeper, StakeKeeper, Staking};
+//! Implementation of the builder for [App].
+
+use crate::error::std_error;
 use crate::wasm_emulation::channel::RemoteChannel;
 use crate::{
-    App, Bank, BankKeeper, FailingModule, Gov, GovFailingModule, Ibc, IbcFailingModule, Module,
-    Router, Stargate, StargateFailing, Wasm, WasmKeeper,
+    App, Bank, BankKeeper, Distribution, DistributionKeeper, FailingModule, Gov, GovFailingModule,
+    Ibc, IbcFailingModule, Module, Router, StakeKeeper, Staking, Wasm, WasmKeeper,
 };
 use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
-use cosmwasm_std::{Api, BlockInfo, CustomMsg, CustomQuery, Empty, Storage};
+use cosmwasm_std::{Api, BlockInfo, CustomMsg, CustomQuery,StdResult, Empty, Storage};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
@@ -16,18 +17,15 @@ use std::fmt::Debug;
 ///
 /// ```
 /// # use cosmwasm_std::Empty;
-/// # use cw_multi_test::{no_init, BasicAppBuilder, FailingModule, Module};
+/// # use cw_multi_test::{BasicAppBuilder, FailingModule, Module};
 /// # type MyHandler = FailingModule<Empty, Empty, Empty>;
 /// # type MyExecC = Empty;
 /// # type MyQueryC = Empty;
 ///
 /// let mut app = BasicAppBuilder::<MyExecC, MyQueryC>::new_custom()
 ///                   .with_custom(MyHandler::default())
-///                   .build(no_init);
+///                   .build(|_, _, _| {});
 /// ```
-/// This type alias is crucial for constructing a custom app with specific modules.
-/// It provides a streamlined approach to building and configuring an App tailored to
-/// particular testing needs or scenarios.
 pub type BasicAppBuilder<ExecC, QueryC> = AppBuilder<
     BankKeeper,
     MockApi,
@@ -38,12 +36,11 @@ pub type BasicAppBuilder<ExecC, QueryC> = AppBuilder<
     DistributionKeeper,
     IbcFailingModule,
     GovFailingModule,
-    StargateFailing,
 >;
 
 /// Utility to build [App] in stages.
 /// When particular properties are not explicitly set, then default values are used.
-pub struct AppBuilder<Bank, Api, Storage, Custom, Wasm, Staking, Distr, Ibc, Gov, Stargate> {
+pub struct AppBuilder<Bank, Api, Storage, Custom, Wasm, Staking, Distr, Ibc, Gov> {
     api: Api,
     block: BlockInfo,
     storage: Storage,
@@ -55,7 +52,6 @@ pub struct AppBuilder<Bank, Api, Storage, Custom, Wasm, Staking, Distr, Ibc, Gov
     ibc: Ibc,
     gov: Gov,
     remote: Option<RemoteChannel>,
-    stargate: Stargate,
 }
 
 impl Default
@@ -69,7 +65,6 @@ impl Default
         DistributionKeeper,
         IbcFailingModule,
         GovFailingModule,
-        StargateFailing,
     >
 {
     fn default() -> Self {
@@ -88,7 +83,6 @@ impl
         DistributionKeeper,
         IbcFailingModule,
         GovFailingModule,
-        StargateFailing,
     >
 {
     /// Creates builder with default components working with empty exec and query messages.
@@ -99,12 +93,11 @@ impl
             storage: MockStorage::new(),
             bank: BankKeeper::new(),
             wasm: WasmKeeper::new(),
-            custom: FailingModule::new(),
+            custom: FailingModule::new("custom"),
             staking: StakeKeeper::new(),
             distribution: DistributionKeeper::new(),
-            ibc: IbcFailingModule::new(),
-            gov: GovFailingModule::new(),
-            stargate: StargateFailing,
+            ibc: IbcFailingModule::new("ibc"),
+            gov: GovFailingModule::new("gov"),
             remote: None,
         }
     }
@@ -121,7 +114,6 @@ impl<ExecC, QueryC>
         DistributionKeeper,
         IbcFailingModule,
         GovFailingModule,
-        StargateFailing,
     >
 where
     ExecC: CustomMsg + DeserializeOwned + 'static,
@@ -136,23 +128,21 @@ where
             storage: MockStorage::new(),
             bank: BankKeeper::new(),
             wasm: WasmKeeper::new(),
-            custom: FailingModule::new(),
+            custom: FailingModule::new("custom"),
             staking: StakeKeeper::new(),
             distribution: DistributionKeeper::new(),
-            ibc: IbcFailingModule::new(),
-            gov: GovFailingModule::new(),
-            stargate: StargateFailing,
+            ibc: IbcFailingModule::new("ibc"),
+            gov: GovFailingModule::new("gov"),
             remote: None,
         }
     }
 }
 
-impl<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
-    AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
+impl<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
+    AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
 where
     CustomT: Module,
     WasmT: Wasm<CustomT::ExecT, CustomT::QueryT>,
-    BankT: Bank,
     CustomT::QueryT: CustomQuery,
 {
     /// Overwrites the default wasm executor.
@@ -162,9 +152,8 @@ where
     /// done on final building.
     pub fn with_wasm<NewWasm: Wasm<CustomT::ExecT, CustomT::QueryT>>(
         self,
-        mut wasm: NewWasm,
-    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, NewWasm, StakingT, DistrT, IbcT, GovT, StargateT>
-    {
+        wasm: NewWasm,
+    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, NewWasm, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             bank,
             api,
@@ -176,12 +165,9 @@ where
             ibc,
             gov,
             remote,
-            stargate,
             ..
         } = self;
-        if let Some(remote) = remote.as_ref() {
-            wasm.set_remote(remote.clone());
-        }
+
         AppBuilder {
             api,
             block,
@@ -194,16 +180,14 @@ where
             ibc,
             gov,
             remote,
-            stargate,
         }
     }
 
     /// Overwrites the default bank interface.
     pub fn with_bank<NewBank: Bank>(
         self,
-        mut bank: NewBank,
-    ) -> AppBuilder<NewBank, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
-    {
+        bank: NewBank,
+    ) -> AppBuilder<NewBank, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             wasm,
             api,
@@ -215,13 +199,9 @@ where
             ibc,
             gov,
             remote,
-            stargate,
             ..
         } = self;
 
-        if let Some(remote) = remote.as_ref() {
-            bank.set_remote(remote.clone());
-        }
         AppBuilder {
             api,
             block,
@@ -233,7 +213,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
         }
     }
@@ -242,8 +221,7 @@ where
     pub fn with_api<NewApi: Api>(
         self,
         api: NewApi,
-    ) -> AppBuilder<BankT, NewApi, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
-    {
+    ) -> AppBuilder<BankT, NewApi, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             wasm,
             bank,
@@ -254,7 +232,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
             ..
         } = self;
@@ -270,7 +247,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
         }
     }
@@ -279,8 +255,7 @@ where
     pub fn with_storage<NewStorage: Storage>(
         self,
         storage: NewStorage,
-    ) -> AppBuilder<BankT, ApiT, NewStorage, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
-    {
+    ) -> AppBuilder<BankT, ApiT, NewStorage, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             wasm,
             api,
@@ -291,7 +266,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
             ..
         } = self;
@@ -307,12 +281,11 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
         }
     }
 
-    /// Overwrites the default handler for custom messages.
+    /// Overwrites the default custom messages handler.
     ///
     /// At this point it is needed that new custom implements some `Module` trait, but it doesn't need
     /// to be bound to ExecC or QueryC yet - as those may change. The cross-components validation is
@@ -320,8 +293,7 @@ where
     pub fn with_custom<NewCustom: Module>(
         self,
         custom: NewCustom,
-    ) -> AppBuilder<BankT, ApiT, StorageT, NewCustom, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
-    {
+    ) -> AppBuilder<BankT, ApiT, StorageT, NewCustom, WasmT, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             wasm,
             bank,
@@ -332,7 +304,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
             ..
         } = self;
@@ -348,7 +319,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
         }
     }
@@ -357,8 +327,7 @@ where
     pub fn with_staking<NewStaking: Staking>(
         self,
         staking: NewStaking,
-    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, NewStaking, DistrT, IbcT, GovT, StargateT>
-    {
+    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, NewStaking, DistrT, IbcT, GovT> {
         let AppBuilder {
             wasm,
             api,
@@ -369,7 +338,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
             ..
         } = self;
@@ -385,7 +353,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
         }
     }
@@ -394,18 +361,8 @@ where
     pub fn with_distribution<NewDistribution: Distribution>(
         self,
         distribution: NewDistribution,
-    ) -> AppBuilder<
-        BankT,
-        ApiT,
-        StorageT,
-        CustomT,
-        WasmT,
-        StakingT,
-        NewDistribution,
-        IbcT,
-        GovT,
-        StargateT,
-    > {
+    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, NewDistribution, IbcT, GovT>
+    {
         let AppBuilder {
             wasm,
             api,
@@ -416,7 +373,6 @@ where
             bank,
             ibc,
             gov,
-            stargate,
             remote,
             ..
         } = self;
@@ -432,7 +388,6 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
         }
     }
@@ -447,8 +402,7 @@ where
     pub fn with_ibc<NewIbc: Ibc>(
         self,
         ibc: NewIbc,
-    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, NewIbc, GovT, StargateT>
-    {
+    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, NewIbc, GovT> {
         let AppBuilder {
             wasm,
             api,
@@ -460,7 +414,6 @@ where
             distribution,
             gov,
             remote,
-            stargate,
             ..
         } = self;
 
@@ -472,7 +425,6 @@ where
             wasm,
             custom,
             staking,
-            stargate,
             distribution,
             ibc,
             gov,
@@ -484,8 +436,7 @@ where
     pub fn with_gov<NewGov: Gov>(
         self,
         gov: NewGov,
-    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, NewGov, StargateT>
-    {
+    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, NewGov> {
         let AppBuilder {
             wasm,
             api,
@@ -497,7 +448,6 @@ where
             distribution,
             ibc,
             remote,
-            stargate,
             ..
         } = self;
 
@@ -512,29 +462,15 @@ where
             distribution,
             ibc,
             gov,
-            stargate,
             remote,
         }
     }
 
     /// Sets the chain of the app
     pub fn with_remote(
-        mut self,
-        remote: RemoteChannel,
-    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
-    {
-        self.remote = Some(remote.clone());
-        self.wasm.set_remote(remote.clone());
-        self.bank.set_remote(remote.clone());
-        self
-    }
-
-    /// Overwrites the default stargate interface.
-    pub fn with_stargate<NewStargate: Stargate>(
         self,
-        stargate: NewStargate,
-    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, NewStargate>
-    {
+        remote: RemoteChannel,
+    ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             wasm,
             api,
@@ -546,7 +482,6 @@ where
             distribution,
             ibc,
             gov,
-            remote,
             ..
         } = self;
 
@@ -560,9 +495,8 @@ where
             staking,
             distribution,
             ibc,
+            remote: Some(remote),
             gov,
-            stargate,
-            remote,
         }
     }
 
@@ -572,13 +506,14 @@ where
         self
     }
 
-    /// Builds the final [App] with initialization.
-    ///
-    /// At this point all component types have to be properly related to each other.
+    #[allow(clippy::type_complexity)]
+    /// Builds final `App`. At this point all components type have to be properly related to each
+    /// other. If there are some generics related compilation errors, make sure that all components
+    /// are properly relating to each other.
     pub fn build<F>(
         self,
         init_fn: F,
-    ) -> App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>
+    ) -> StdResult<App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>>
     where
         BankT: Bank,
         ApiT: Api,
@@ -589,33 +524,32 @@ where
         DistrT: Distribution,
         IbcT: Ibc,
         GovT: Gov,
-        StargateT: Stargate,
         F: FnOnce(
-            &mut Router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>,
-            &ApiT,
+            &mut Router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>,
+            &dyn Api,
             &mut dyn Storage,
         ),
     {
-        // build the final application
+        let router = Router {
+            wasm: self.wasm,
+            bank: self.bank,
+            custom: self.custom,
+            staking: self.staking,
+            distribution: self.distribution,
+            ibc: self.ibc,
+            gov: self.gov,
+        };
+
         let mut app = App {
-            router: Router {
-                wasm: self.wasm,
-                bank: self.bank,
-                custom: self.custom,
-                staking: self.staking,
-                distribution: self.distribution,
-                ibc: self.ibc,
-                gov: self.gov,
-                stargate: self.stargate,
-            },
+            router,
             api: self.api,
             block: self.block,
             storage: self.storage,
-            remote: self.remote,
+            remote: self.remote.ok_or(std_error!(
+                "Remote has to be defined to use clone-testing"
+            ))?,
         };
-        // execute initialization provided by the caller
         app.init_modules(init_fn);
-        // return already initialized application
-        app
+        Ok(app)
     }
 }

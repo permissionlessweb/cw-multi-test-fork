@@ -1,5 +1,5 @@
-use anyhow::Result as AnyResult;
-use cw_orch_daemon::GrpcChannel;
+use cosmwasm_std::StdResult;
+use cw_orch::daemon::GrpcChannel;
 use tokio::runtime::{Handle, Runtime};
 use tonic::transport::Channel;
 
@@ -8,7 +8,7 @@ fn get_channel(
     grpc_urls: &[String],
     chain_id: impl Into<String>,
     rt: &Runtime,
-) -> anyhow::Result<tonic::transport::Channel> {
+) -> StdResult<tonic::transport::Channel> {
     let channel = rt.block_on(GrpcChannel::connect(grpc_urls, &chain_id.into()))?;
     Ok(channel)
 }
@@ -28,7 +28,7 @@ impl RemoteChannel {
         grpc_urls: &[&str],
         chain_id: impl Into<String>,
         pub_address_prefix: impl Into<String>,
-    ) -> AnyResult<Self> {
+    ) -> StdResult<Self> {
         let chain_id = chain_id.into();
         Ok(Self {
             rt: rt.handle().clone(),

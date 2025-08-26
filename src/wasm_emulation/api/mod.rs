@@ -2,12 +2,13 @@ use crate::wasm_emulation::query::gas::{GAS_COST_CANONICALIZE, GAS_COST_HUMANIZE
 use bech32::{Bech32, Hrp};
 use cosmwasm_std::Addr;
 use cosmwasm_vm::{BackendApi, BackendError, GasInfo};
+use sha2::{Digest, Sha256};
 use std::ops::AddAssign;
 
 const SHORT_CANON_LEN: usize = 20;
 const LONG_CANON_LEN: usize = 32;
 
-pub fn bytes_from_bech32(address: &str, prefix: &Hrp) -> Result<Vec<u8>, BackendError> {
+pub fn bytes_from_bech32(address: &str, prefix: &str) -> Result<Vec<u8>, BackendError> {
     if address.is_empty() {
         return Err(BackendError::Unknown {
             msg: "empty address string is not allowed".to_string(),
@@ -17,13 +18,13 @@ pub fn bytes_from_bech32(address: &str, prefix: &Hrp) -> Result<Vec<u8>, Backend
     let (hrp, data) = bech32::decode(address).map_err(|e| BackendError::Unknown {
         msg: format!("Invalid Bech32 address : Err {}", e),
     })?;
-    if hrp.ne(prefix) {
+    if hrp != Hrp::parse(prefix).unwrap() {
         return Err(BackendError::Unknown {
             msg: format!("invalid Bech32 prefix; expected {}, got {}", prefix, hrp),
         });
     }
 
-    Ok(data)
+    Ok(data.into_iter().collect::<Vec<u8>>())
 }
 
 pub const MAX_PREFIX_CHARS: usize = 10;
@@ -47,7 +48,7 @@ impl RealApi {
         Self { prefix: api_prefix }
     }
 
-    pub fn get_prefix(&self) -> Result<Hrp, BackendError> {
+    pub fn get_prefix(&self) -> String {
         let mut prefix = Vec::new();
 
         for &c in self.prefix.iter() {
@@ -55,8 +56,7 @@ impl RealApi {
                 prefix.push(c);
             }
         }
-        let prefix_string: String = prefix.into_iter().collect();
-        Hrp::parse(&prefix_string).map_err(|e| BackendError::Unknown { msg: e.to_string() })
+        prefix.iter().collect()
     }
 
     pub fn next_address(&self, count: usize) -> Addr {
@@ -113,11 +113,7 @@ impl BackendApi for RealApi {
             );
         }
 
-        (
-            self.get_prefix()
-                .and_then(|prefix| bytes_from_bech32(human, &prefix)),
-            gas_cost,
-        )
+        (bytes_from_bech32(human, &self.get_prefix()), gas_cost)
     }
 
     fn addr_humanize(&self, canonical: &[u8]) -> cosmwasm_vm::BackendResult<String> {
@@ -136,10 +132,8 @@ impl BackendApi for RealApi {
             return (Ok("".to_string()), gas_cost);
         }
 
-        let human = self.get_prefix().and_then(|prefix| {
-            bech32::encode::<Bech32>(prefix, canonical)
-                .map_err(|e| BackendError::Unknown { msg: e.to_string() })
-        });
+        let human = bech32::encode::<Bech32>(Hrp::parse(&self.get_prefix()).unwrap(), &canonical)
+            .map_err(|e| BackendError::Unknown { msg: e.to_string() });
 
         (human, gas_cost)
     }
@@ -156,7 +150,7 @@ mod test {
         let api = RealApi::new(prefix);
 
         let final_prefix = api.get_prefix();
-        assert_eq!(prefix, final_prefix.unwrap().as_str());
+        assert_eq!(prefix, final_prefix);
     }
 
     #[test]

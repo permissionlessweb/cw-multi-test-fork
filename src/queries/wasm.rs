@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use anyhow::Result as AnyResult;
-use cosmwasm_std::{Addr, Binary, CodeInfoResponse, CustomQuery, Order, Storage};
-use cw_orch_daemon::queriers::CosmWasm;
+use cosmwasm_std::{Addr, Binary, CodeInfoResponse, CustomQuery, Order, StdResult, Storage};
+use cw_orch::daemon::queriers::CosmWasm;
 
 use crate::{
     prefixed_storage::prefixed_read,
@@ -14,14 +13,14 @@ use crate::{
 pub struct WasmRemoteQuerier;
 
 impl WasmRemoteQuerier {
-    pub fn code_info(remote: RemoteChannel, code_id: u64) -> AnyResult<CodeInfoResponse> {
+    pub fn code_info(remote: RemoteChannel, code_id: u64) -> StdResult<CodeInfoResponse> {
         let wasm_querier = CosmWasm::new_sync(remote.channel, &remote.rt);
 
         let code_info = remote.rt.block_on(wasm_querier._code(code_id))?;
         Ok(code_info)
     }
 
-    pub fn load_distant_contract(remote: RemoteChannel, address: &Addr) -> AnyResult<ContractData> {
+    pub fn load_distant_contract(remote: RemoteChannel, address: &Addr) -> StdResult<ContractData> {
         let wasm_querier = CosmWasm::new_sync(remote.channel, &remote.rt);
 
         let code_info = remote.rt.block_on(wasm_querier._contract_info(address))?;
@@ -30,8 +29,6 @@ impl WasmRemoteQuerier {
             admin: code_info.admin.map(Addr::unchecked),
             code_id: code_info.code_id,
             creator: Addr::unchecked(code_info.creator),
-            label: "Distant contract with no label".to_string(),
-            created: 0,
         })
     }
 
@@ -39,7 +36,7 @@ impl WasmRemoteQuerier {
         remote: RemoteChannel,
         contract_addr: &Addr,
         key: Binary,
-    ) -> AnyResult<Vec<u8>> {
+    ) -> StdResult<Vec<u8>> {
         let wasm_querier = CosmWasm::new_sync(remote.channel, &remote.rt);
         let query_result = remote
             .rt
@@ -50,7 +47,7 @@ impl WasmRemoteQuerier {
 }
 
 impl<ExecC, QueryC: CustomQuery> AllWasmQuerier for WasmKeeper<ExecC, QueryC> {
-    fn query_all(&self, storage: &dyn Storage) -> AnyResult<WasmStorage> {
+    fn query_all(&self, storage: &dyn Storage) -> StdResult<WasmStorage> {
         let all_local_state: Vec<_> = storage.range(None, None, Order::Ascending).collect();
 
         let contracts = CONTRACTS

@@ -30,7 +30,7 @@ workflows:
 jobs:
   build_and_test:
     docker:
-      - image: rust:1.75
+      - image: rust:1.65.0
     working_directory: ~/project
     steps:
       - checkout
@@ -42,8 +42,8 @@ jobs:
           command: cargo update
       - restore_cache:
           keys:
-            - cargocache-v2-multi-test:1.75-{{ checksum "Cargo.lock" }}
-            - cargocache-v2-multi-test:1.75-
+            - cargocache-v2-multi-test:1.65.0-{{ checksum "Cargo.lock" }}
+            - cargocache-v2-multi-test:1.65.0-
       - run:
           name: Build library for native target
           command: cargo build --locked
@@ -54,12 +54,12 @@ jobs:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-v2-multi-test:1.75-{{ checksum "Cargo.lock" }}
+          key: cargocache-v2-multi-test:1.65.0-{{ checksum "Cargo.lock" }}
 
   build_minimal:
     docker:
       - image: rustlang/rust:nightly
-    working_directory: ~/project
+    working_directory: ~/project/
     steps:
       - checkout
       - run:
@@ -68,29 +68,25 @@ jobs:
       - run:
           name: Remove Cargo.lock
           command: rm Cargo.lock
-      #  Remove the following command after dependencies in crates ahash and num-bigint are upgraded!
-      - run:
-          name: Temporarily update problematic crates
-          command: cargo update -p ahash && cargo update -p num-bigint
       - restore_cache:
           keys:
-            - cargocache-v2-multi-test:1.75-minimal-{{ checksum "Cargo.toml" }}
+            - cargocache-v2-multi-test:1.65.0-minimal-{{ checksum "Cargo.toml" }}
       - run:
           name: Build library for native target
-          command: cargo build -Zminimal-versions --all-features
+          command: cargo build -Zminimal-versions --features backtrace,cosmwasm_1_1,cosmwasm_1_2,cosmwasm_1_3,cosmwasm_1_4
       - run:
           name: Run unit tests
-          command: cargo test --workspace -Zminimal-versions --all-features
+          command: cargo test --workspace -Zminimal-versions --features backtrace,cosmwasm_1_1,cosmwasm_1_2,cosmwasm_1_3,cosmwasm_1_4
       - save_cache:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-v2-multi-test:1.75-minimal-{{ checksum "Cargo.toml" }}
+          key: cargocache-v2-multi-test:1.65.0-minimal-{{ checksum "Cargo.toml" }}
 
   build_maximal:
     docker:
-      - image: rust:1.75
-    working_directory: ~/project
+      - image: rust:1.65.0
+    working_directory: ~/project/
     steps:
       - checkout
       - run:
@@ -101,22 +97,22 @@ jobs:
           command: cargo update
       - restore_cache:
           keys:
-            - cargocache-v2-multi-test:1.75-{{ checksum "Cargo.lock" }}
+            - cargocache-v2-multi-test:1.65.0-{{ checksum "Cargo.lock" }}
       - run:
           name: Build library for native target
           command: cargo build --locked --all-features
       - run:
           name: Run unit tests
-          command: cargo test --workspace --locked --all-features
+          command: cargo test --workspace --locked --features backtrace,cosmwasm_1_1,cosmwasm_1_2,cosmwasm_1_3,cosmwasm_1_4
       - save_cache:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-v2-multi-test:1.75-{{ checksum "Cargo.lock" }}
+          key: cargocache-v2-multi-test:1.65.0-{{ checksum "Cargo.lock" }}
 
   lint:
     docker:
-      - image: rust:1.75
+      - image: rust:1.65.0
     steps:
       - checkout
       - run:
@@ -127,8 +123,8 @@ jobs:
           command: cargo update
       - restore_cache:
           keys:
-            - cargocache-v2-lint-rust:1.75-{{ checksum "Cargo.lock" }}
-            - cargocache-v2-lint-rust:1.75-
+            - cargocache-v2-lint-rust:1.65.0-{{ checksum "Cargo.lock" }}
+            - cargocache-v2-lint-rust:1.65.0-
       - run:
           name: Add rustfmt component
           command: rustup component add rustfmt
@@ -147,19 +143,19 @@ jobs:
             - target/debug/.fingerprint
             - target/debug/build
             - target/debug/deps
-          key: cargocache-v2-lint-rust:1.75-{{ checksum "Cargo.lock" }}
+          key: cargocache-v2-lint-rust:1.65.0-{{ checksum "Cargo.lock" }}
 
   coverage:
     # https://circleci.com/developer/images?imageType=machine
     machine:
-      image: ubuntu-2404:2024.05.1
+      image: ubuntu-2004:202201-02
     steps:
       - checkout
       - run:
           name: Run tests with coverage
           command: |
             mkdir -p cov
-            docker run --security-opt seccomp=unconfined -v "${PWD}:/volume" xd009642/tarpaulin:0.31.0 \
-              sh -c "cargo tarpaulin --workspace --all-features --force-clean --engine llvm --out xml --output-dir cov"
+            docker run --security-opt seccomp=unconfined -v "${PWD}:/volume" xd009642/tarpaulin \
+              sh -c "cargo tarpaulin --workspace --features backtrace,cosmwasm_1_1,cosmwasm_1_2,cosmwasm_1_3,cosmwasm_1_4 --force-clean --engine llvm --out xml --output-dir cov"
       - codecov/upload:
           file: cov/cobertura.xml

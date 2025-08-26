@@ -1,38 +1,47 @@
-use crate::wasm_emulation::{
-    api::RealApi,
-    input::{InstanceArguments, ReplyArgs},
-    instance::instance_from_reused_module,
-    output::{StorageChanges, WasmRunnerOutput},
-    query::MockQuerier,
-    storage::DualStorage,
-};
-use cosmwasm_std::{
-    Binary, Checksum, CustomMsg, CustomQuery, Deps, DepsMut, Env, MessageInfo, Order, Reply,
-    Response, StdError, Storage,
-};
+use crate::wasm_emulation::api::RealApi;
+use crate::wasm_emulation::input::ReplyArgs;
+use crate::wasm_emulation::instance::instance_from_reused_module;
+use crate::wasm_emulation::output::StorageChanges;
+use crate::wasm_emulation::query::MockQuerier;
+use crate::wasm_emulation::storage::DualStorage;
+use cosmwasm_std::Checksum;
+use cosmwasm_std::CustomMsg;
+use cosmwasm_std::StdError;
+use cosmwasm_std::StdResult;
+use cosmwasm_vm::WasmLimits;
 use cosmwasm_vm::{
-    call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
-    internals::check_wasm, Backend, BackendApi, Instance, InstanceOptions, Querier, WasmLimits,
+    call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo, Backend,
+    BackendApi, Instance, InstanceOptions, Querier,
 };
-use cw_orch_daemon::queriers::CosmWasm;
+use cw_orch::daemon::queriers::CosmWasm;
+
+use cosmwasm_std::Order;
+use cosmwasm_std::Storage;
 
 use serde::de::DeserializeOwned;
 use wasmer::Engine;
 use wasmer::Module;
 
+use crate::wasm_emulation::input::InstanceArguments;
+use crate::wasm_emulation::output::WasmRunnerOutput;
+
+use cosmwasm_vm::internals::check_wasm;
 use std::collections::HashSet;
 
 use crate::Contract;
 
-use anyhow::Result as AnyResult;
+use cosmwasm_std::{Binary, CustomQuery, Deps, DepsMut, Env, MessageInfo, Reply, Response};
 
-use super::{
-    channel::RemoteChannel,
-    input::{ExecuteArgs, InstantiateArgs, MigrateArgs, QueryArgs, SudoArgs, WasmFunction},
-    instance::create_module,
-    output::WasmOutput,
-    query::mock_querier::ForkState,
-};
+use super::channel::RemoteChannel;
+use super::input::ExecuteArgs;
+use super::input::InstantiateArgs;
+use super::input::MigrateArgs;
+use super::input::QueryArgs;
+use super::input::SudoArgs;
+use super::input::WasmFunction;
+use super::instance::create_module;
+use super::output::WasmOutput;
+use super::query::mock_querier::ForkState;
 
 fn apply_storage_changes<ExecC>(storage: &mut dyn Storage, output: &WasmRunnerOutput<ExecC>) {
     // We change all the values with the output
@@ -135,7 +144,7 @@ impl WasmContract {
         &self,
         args: InstanceArguments,
         fork_state: ForkState<ExecC, QueryC>,
-    ) -> AnyResult<WasmRunnerOutput<ExecC>> {
+    ) -> StdResult<WasmRunnerOutput<ExecC>> {
         let InstanceArguments {
             function,
             init_storage,
@@ -223,7 +232,7 @@ where
         info: MessageInfo,
         msg: Vec<u8>,
         fork_state: ForkState<ExecC, QueryC>,
-    ) -> AnyResult<Response<ExecC>> {
+    ) -> StdResult<Response<ExecC>> {
         // We start by building the dependencies we will pass through the wasm executer
         let execute_args = InstanceArguments {
             function: WasmFunction::Execute(ExecuteArgs { env, info, msg }),
@@ -248,7 +257,7 @@ where
         info: MessageInfo,
         msg: Vec<u8>,
         fork_state: ForkState<ExecC, QueryC>,
-    ) -> AnyResult<Response<ExecC>> {
+    ) -> StdResult<Response<ExecC>> {
         // We start by building the dependencies we will pass through the wasm executer
         let instantiate_arguments = InstanceArguments {
             function: WasmFunction::Instantiate(InstantiateArgs { env, info, msg }),
@@ -272,7 +281,7 @@ where
         env: Env,
         msg: Vec<u8>,
         fork_state: ForkState<ExecC, QueryC>,
-    ) -> AnyResult<Binary> {
+    ) -> StdResult<Binary> {
         // We start by building the dependencies we will pass through the wasm executer
         let query_arguments = InstanceArguments {
             function: WasmFunction::Query(QueryArgs { env, msg }),
@@ -297,7 +306,7 @@ where
         env: Env,
         msg: Vec<u8>,
         fork_state: ForkState<ExecC, QueryC>,
-    ) -> AnyResult<Response<ExecC>> {
+    ) -> StdResult<Response<ExecC>> {
         let sudo_args = InstanceArguments {
             function: WasmFunction::Sudo(SudoArgs { env, msg }),
             init_storage: deps.storage.range(None, None, Order::Ascending).collect(),
@@ -321,7 +330,7 @@ where
         env: Env,
         reply: Reply,
         fork_state: ForkState<ExecC, QueryC>,
-    ) -> AnyResult<Response<ExecC>> {
+    ) -> StdResult<Response<ExecC>> {
         let reply_args = InstanceArguments {
             function: WasmFunction::Reply(ReplyArgs { env, reply }),
             init_storage: deps.storage.range(None, None, Order::Ascending).collect(),
@@ -343,11 +352,12 @@ where
         &self,
         deps: DepsMut<QueryC>,
         env: Env,
+        info: MessageInfo,
         msg: Vec<u8>,
         fork_state: ForkState<ExecC, QueryC>,
-    ) -> AnyResult<Response<ExecC>> {
+    ) -> StdResult<Response<ExecC>> {
         let migrate_args = InstanceArguments {
-            function: WasmFunction::Migrate(MigrateArgs { env, msg }),
+            function: WasmFunction::Migrate(MigrateArgs { env, info, msg }),
             init_storage: deps.storage.range(None, None, Order::Ascending).collect(),
         };
 
@@ -371,48 +381,50 @@ pub fn execute_function<
 >(
     instance: &mut Instance<A, B, C>,
     function: WasmFunction,
-) -> AnyResult<WasmOutput<ExecC>> {
+) -> StdResult<WasmOutput<ExecC>> {
     match function {
         WasmFunction::Execute(args) => {
             let result = call_execute(instance, &args.env, &args.info, &args.msg)?
                 .into_result()
-                .map_err(StdError::generic_err)?;
+                .map_err(StdError::msg)?;
             Ok(WasmOutput::Execute(result))
         }
         WasmFunction::Query(args) => {
             let result = call_query(instance, &args.env, &args.msg)?
                 .into_result()
-                .map_err(StdError::generic_err)?;
+                .map_err(StdError::msg)?;
             Ok(WasmOutput::Query(result))
         }
         WasmFunction::Instantiate(args) => {
             let result = call_instantiate(instance, &args.env, &args.info, &args.msg)?
                 .into_result()
-                .map_err(StdError::generic_err)?;
+                .map_err(StdError::msg)?;
             Ok(WasmOutput::Instantiate(result))
         }
         WasmFunction::Reply(args) => {
             let result = call_reply(instance, &args.env, &args.reply)?
                 .into_result()
-                .map_err(StdError::generic_err)?;
+                .map_err(StdError::msg)?;
             Ok(WasmOutput::Reply(result))
         }
         WasmFunction::Migrate(args) => {
             let result = call_migrate(instance, &args.env, &args.msg)?
                 .into_result()
-                .map_err(StdError::generic_err)?;
+                .map_err(StdError::msg)?;
             Ok(WasmOutput::Migrate(result))
         }
         WasmFunction::Sudo(args) => {
             let result = call_sudo(instance, &args.env, &args.msg)?
                 .into_result()
-                .map_err(StdError::generic_err)?;
+                .map_err(StdError::msg)?;
             Ok(WasmOutput::Sudo(result))
         }
     }
 }
 
 mod wasm_caching {
+    use crate::error::{std_error, std_error_bail};
+
     use super::*;
 
     use std::{
@@ -421,8 +433,6 @@ mod wasm_caching {
         os::unix::fs::FileExt,
         path::PathBuf,
     };
-
-    use anyhow::{bail, Context};
 
     const WASM_CACHE_DIR: &str = "wasm_cache";
     const WASM_CACHE_ENV: &str = "WASM_CACHE";
@@ -491,10 +501,10 @@ mod wasm_caching {
     /// - Wasm caching disabled: return result of the `wasm_code_bytes` function
     /// - Wasm file not found in cache location: return result of the `wasm_code_bytes` function, saving cache on on success
     /// - Wasm stored in cache: return bytes
-    pub(crate) fn maybe_cached_wasm<F: Fn() -> AnyResult<Vec<u8>>>(
+    pub(crate) fn maybe_cached_wasm<F: Fn() -> StdResult<Vec<u8>>>(
         key: String,
         wasm_code_bytes: F,
-    ) -> AnyResult<Vec<u8>> {
+    ) -> StdResult<Vec<u8>> {
         let wasm_cache_enabled = env::var(WASM_CACHE_ENV)
             .ok()
             .and_then(|wasm_cache| wasm_cache.parse().ok())
@@ -511,7 +521,7 @@ mod wasm_caching {
             // Verify it's dir
             Ok(wasm_cache_metadata) => {
                 if !wasm_cache_metadata.is_dir() {
-                    bail!("{WASM_CACHE_DIR} supposed to be directory")
+                    std_error_bail!("{WASM_CACHE_DIR} supposed to be directory")
                 }
             }
             // Error on checking cache dir, try to create it
@@ -525,8 +535,8 @@ mod wasm_caching {
         let wasm_bytes = match fs::metadata(&cached_wasm_file) {
             // Cache file exists, try to read it
             Ok(_) => {
-                let mut file =
-                    fs::File::open(&cached_wasm_file).context("unable to open wasm cache file")?;
+                let mut file = fs::File::open(&cached_wasm_file)
+                    .map_err(|err| std_error!("{} {}", err, "unable to open wasm cache file"))?;
                 // If someone is writing to it we need to wait, and then check again
                 // TODO: decide what is the best way to wait for it
                 let mut status = WasmCachingStatus::status(&file);
@@ -541,8 +551,9 @@ mod wasm_caching {
                     WasmCachingStatus::Ready => {
                         let mut buf = vec![];
                         file.seek(std::io::SeekFrom::Start(1))?;
-                        file.read_to_end(&mut buf)
-                            .context("unable to open wasm cache file")?;
+                        file.read_to_end(&mut buf).map_err(|err| {
+                            std_error!("{} {}", err, "unable to open wasm cache file")
+                        })?;
                         buf
                     }
                     // Ready for read
@@ -562,10 +573,10 @@ mod wasm_caching {
         Ok(wasm_bytes)
     }
 
-    fn store_new_wasm<F: Fn() -> AnyResult<Vec<u8>>>(
+    fn store_new_wasm<F: Fn() -> StdResult<Vec<u8>>>(
         wasm_code_bytes: F,
         cached_wasm_file: &PathBuf,
-    ) -> Result<Vec<u8>, anyhow::Error> {
+    ) -> Result<Vec<u8>, StdError> {
         let options = file_lock::FileOptions::new().create(true).write(true);
         let file_lock_status = file_lock::FileLock::lock(cached_wasm_file, false, options);
         let wasm = wasm_code_bytes()?;

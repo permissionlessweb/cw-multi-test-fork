@@ -3,20 +3,20 @@ fn main() {
 }
 use std::path::Path;
 
-use anyhow::Result as AnyResult;
 use clone_cw_multi_test::{
-    wasm_emulation::{channel::RemoteChannel, query::ContainsRemote},
-    App, AppBuilder, BankKeeper, ContractWrapper, Executor, MockApiBech32, WasmKeeper,
+    addons::{MockAddressGenerator, MockApiBech32},
+    wasm_emulation::channel::RemoteChannel,
+    App, AppBuilder, BankKeeper, ContractWrapper, Executor, WasmKeeper,
 };
-use cosmwasm_std::{Addr, Empty};
+use cosmwasm_std::{Addr, Empty, StdResult};
 use counter::msg::{ExecuteMsg, GetCountResponse, QueryMsg};
-use cw_orch_daemon::networks::PHOENIX_1;
+use cw_orch::daemon::networks::PHOENIX_1;
 use tokio::runtime::Runtime;
 
 mod counter;
 
 pub const SENDER: &str = "terra17c6ts8grcfrgquhj3haclg44le8s7qkx6l2yx33acguxhpf000xqhnl3je";
-fn increment(app: &mut App<BankKeeper, MockApiBech32>, contract: Addr) -> AnyResult<()> {
+fn increment(app: &mut App<BankKeeper, MockApiBech32>, contract: Addr) -> StdResult<()> {
     let sender = Addr::unchecked(SENDER);
     app.execute_contract(
         sender.clone(),
@@ -27,31 +27,31 @@ fn increment(app: &mut App<BankKeeper, MockApiBech32>, contract: Addr) -> AnyRes
     Ok(())
 }
 
-fn count(app: &App<BankKeeper, MockApiBech32>, contract: Addr) -> AnyResult<GetCountResponse> {
+fn count(app: &App<BankKeeper, MockApiBech32>, contract: Addr) -> StdResult<GetCountResponse> {
     Ok(app
         .wrap()
-        .query_wasm_smart(contract.clone(), &QueryMsg::GetCount {})?)
+        .query_wasm_smart(contract.clone(), &QueryMsg::Count {})?)
 }
 
 fn raw_cousin_count(
     app: &App<BankKeeper, MockApiBech32>,
     contract: Addr,
-) -> AnyResult<GetCountResponse> {
+) -> StdResult<GetCountResponse> {
     Ok(app
         .wrap()
-        .query_wasm_smart(contract.clone(), &QueryMsg::GetRawCousinCount {})?)
+        .query_wasm_smart(contract.clone(), &QueryMsg::RawCousinCount {})?)
 }
 
 fn cousin_count(
     app: &App<BankKeeper, MockApiBech32>,
     contract: Addr,
-) -> AnyResult<GetCountResponse> {
+) -> StdResult<GetCountResponse> {
     Ok(app
         .wrap()
-        .query_wasm_smart(contract.clone(), &QueryMsg::GetCousinCount {})?)
+        .query_wasm_smart(contract.clone(), &QueryMsg::CousinCount {})?)
 }
 
-fn test() -> AnyResult<()> {
+fn test() -> StdResult<()> {
     env_logger::init();
     let rust_contract = ContractWrapper::new(
         counter::contract::execute,
@@ -75,7 +75,9 @@ fn test() -> AnyResult<()> {
         chain.network_info.pub_address_prefix,
     )?;
 
-    let wasm = WasmKeeper::<Empty, Empty>::new().with_remote(remote_channel.clone());
+    let wasm = WasmKeeper::<Empty, Empty>::new()
+        .with_remote(remote_channel.clone())
+        .with_address_generator(MockAddressGenerator);
 
     let bank = BankKeeper::new().with_remote(remote_channel.clone());
 
@@ -85,7 +87,7 @@ fn test() -> AnyResult<()> {
         .with_bank(bank)
         .with_remote(remote_channel)
         .with_api(MockApiBech32::new(chain.network_info.pub_address_prefix))
-        .build(|_, _, _| {});
+        .build(|_, _, _| {})?;
 
     let sender = Addr::unchecked(SENDER);
     let rust_code_id = app.store_code(Box::new(rust_contract));

@@ -2,9 +2,9 @@ use crate::wasm_emulation::channel::RemoteChannel;
 
 use cosmrs::proto::cosmos::base::query::v1beta1::PageRequest;
 use cosmrs::proto::cosmwasm::wasm::v1::Model;
-use cosmwasm_std::{Addr, Record};
+use cosmwasm_std::{Addr, Record, StdResult};
 use cosmwasm_std::{Order, Storage};
-use cw_orch_daemon::queriers::CosmWasm;
+use cw_orch::daemon::queriers::CosmWasm;
 use num_bigint::{BigInt, Sign};
 use std::iter::{self, Peekable};
 
@@ -34,7 +34,6 @@ fn _gt(key1: Vec<u8>, key2: Vec<u8>) -> bool {
 
 use std::collections::HashSet;
 
-use anyhow::Result as AnyResult;
 const DISTANT_LIMIT: u64 = 5u64;
 
 struct DistantIter {
@@ -54,7 +53,7 @@ struct Iter<'a> {
     local_iter: Peekable<Box<dyn Iterator<Item = Record> + 'a>>,
 }
 
-impl Iterator for Iter<'_> {
+impl<'i> Iterator for Iter<'i> {
     type Item = Record;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -144,7 +143,7 @@ impl<'a> DualStorage<'a> {
         remote: RemoteChannel,
         contract_addr: String,
         local_storage: Box<dyn Storage + 'a>,
-    ) -> AnyResult<DualStorage<'a>> {
+    ) -> StdResult<DualStorage> {
         Ok(Self {
             local_storage,
             remote,
@@ -154,7 +153,7 @@ impl<'a> DualStorage<'a> {
     }
 }
 
-impl Storage for DualStorage<'_> {
+impl<'a> Storage for DualStorage<'a> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         // First we try to get the value locally
         let mut value = self.local_storage.get(key);
@@ -198,7 +197,7 @@ impl Storage for DualStorage<'_> {
             start.map(|s| s.to_vec()).unwrap_or_default()
         };
 
-        Box::new(Iter {
+        return Box::new(Iter {
             distant_iter: DistantIter {
                 remote: self.remote.clone(),
                 contract_addr: self.contract_addr.clone(),
@@ -210,6 +209,6 @@ impl Storage for DualStorage<'_> {
                 reverse: order == Order::Descending,
             },
             local_iter: self.local_storage.range(start, end, order).peekable(),
-        })
+        });
     }
 }

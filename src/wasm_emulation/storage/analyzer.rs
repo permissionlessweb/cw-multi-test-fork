@@ -1,10 +1,9 @@
 use crate::{
-    featured::staking::{Distribution, Staking},
     prefixed_storage::{decode_length, to_length_prefixed, CONTRACT_STORAGE_PREFIX},
     wasm_emulation::channel::RemoteChannel,
-    BankKeeper, Gov, Ibc, Module, Stargate, WasmKeeper,
+    BankKeeper, Distribution, Gov, Ibc, Module, Staking, WasmKeeper,
 };
-use cosmwasm_std::{Addr, Api, Coin, CustomMsg, CustomQuery, Storage};
+use cosmwasm_std::{Addr, Api, Coin, CustomMsg, CustomQuery, StdResult, Storage};
 use cw_orch::prelude::BankQuerier;
 use cw_utils::NativeBalance;
 use rustc_serialize::json::Json;
@@ -16,8 +15,6 @@ use treediff::tools::Recorder;
 use crate::wasm::NAMESPACE_WASM;
 
 use crate::{wasm_emulation::input::QuerierStorage, App};
-
-use anyhow::Result as AnyResult;
 
 #[derive(Serialize)]
 pub struct SerializableCoin {
@@ -34,7 +31,7 @@ pub type CustomWasmKeeper<CustomT> =
     WasmKeeper<<CustomT as Module>::ExecT, <CustomT as Module>::QueryT>;
 
 impl StorageAnalyzer {
-    pub fn new<ApiT, StorageT, CustomT, StakingT, DistrT, IbcT, GovT, StargateT>(
+    pub fn new<ApiT, StorageT, CustomT, StakingT, DistrT, IbcT, GovT>(
         app: &App<
             BankKeeper,
             ApiT,
@@ -45,9 +42,8 @@ impl StorageAnalyzer {
             DistrT,
             IbcT,
             GovT,
-            StargateT,
         >,
-    ) -> AnyResult<Self>
+    ) -> StdResult<Self>
     where
         CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
         CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
@@ -59,14 +55,10 @@ impl StorageAnalyzer {
         DistrT: Distribution,
         IbcT: Ibc,
         GovT: Gov,
-        StargateT: Stargate,
     {
         Ok(Self {
             storage: app.get_querier_storage()?,
-            remote: app
-                .remote
-                .clone()
-                .expect("Remote has to be defined to use storage analyzer"),
+            remote: app.remote.clone(),
         })
     }
 
@@ -144,7 +136,7 @@ impl StorageAnalyzer {
     }
 
     pub fn compare_all_readable_contract_storage(&self) {
-        let wasm_querier = cw_orch_daemon::queriers::CosmWasm::new_sync(
+        let wasm_querier = cw_orch::daemon::queriers::CosmWasm::new_sync(
             self.remote.channel.clone(),
             &self.remote.rt,
         );
@@ -232,36 +224,38 @@ impl StorageAnalyzer {
     }
 
     pub fn compare_all_balances(&self) {
-        let bank_querier = cw_orch_daemon::queriers::Bank {
+        let bank_querier = cw_orch::daemon::queriers::Bank {
             channel: self.remote.channel.clone(),
             rt_handle: Some(self.remote.rt.clone()),
         };
         self.get_all_local_balances()
             .into_iter()
             .for_each(|(addr, balances)| {
-                // We look for the data at that key on the contract
-                let distant_data = bank_querier.balance(&addr, None);
+                balances.0.iter().for_each(|coin| {
+                    // We look for the data at that key on the contract
+                    let distant_data = bank_querier.balance(&addr, Some(coin.denom.clone()));
 
-                if let Ok(distant_coins) = distant_data {
-                    let distant_coins = serde_json::to_string(&distant_coins).unwrap();
-                    let distant_coins: Json = distant_coins.parse().unwrap();
+                    if let Ok(distant_coins) = distant_data {
+                        let distant_coins = serde_json::to_string(&distant_coins).unwrap();
+                        let distant_coins: Json = distant_coins.parse().unwrap();
 
-                    let local_coins = serde_json::to_string(&balances.0).unwrap();
-                    let local_coins: Json = local_coins.parse().unwrap();
+                        let local_coins = serde_json::to_string(&balances.0).unwrap();
+                        let local_coins: Json = local_coins.parse().unwrap();
 
-                    let mut d = Recorder::default();
-                    diff(&distant_coins, &local_coins, &mut d);
+                        let mut d = Recorder::default();
+                        diff(&distant_coins, &local_coins, &mut d);
 
-                    let changes: Vec<_> = d
-                        .calls
-                        .iter()
-                        .filter(|change| {
-                            !matches!(change, treediff::tools::ChangeType::Unchanged(..))
-                        })
-                        .collect();
+                        let changes: Vec<_> = d
+                            .calls
+                            .iter()
+                            .filter(|change| {
+                                !matches!(change, treediff::tools::ChangeType::Unchanged(..))
+                            })
+                            .collect();
 
-                    log::info!("Bank balance for {} changed like so : {:?}", addr, changes);
-                }
+                        log::info!("Bank balance for {} changed like so : {:?}", addr, changes);
+                    }
+                });
             });
     }
 

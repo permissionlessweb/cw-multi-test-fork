@@ -1,30 +1,31 @@
 use crate::test_helpers::COUNT;
 use crate::{Contract, ContractWrapper};
-use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    to_json_binary, BankMsg, Binary, Coin, CustomMsg, Deps, DepsMut, Empty, Env, MessageInfo,
-    Response, StdError,
+    to_json_binary, BankMsg, Binary, Coin, Deps, DepsMut, Empty, Env, MessageInfo, Response,
+    StdError,
 };
 use cw_storage_plus::Item;
-use serde::de::DeserializeOwned;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
-#[cw_serde]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InstantiateMessage {
     pub payout: Coin,
 }
 
-#[cw_serde]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SudoMsg {
     pub set_count: u32,
 }
 
-#[cw_serde]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum QueryMsg {
     Count {},
     Payout {},
 }
 
-#[cw_serde]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CountResponse {
     pub count: u32,
 }
@@ -75,7 +76,7 @@ fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
 
 pub fn contract<C>() -> Box<dyn Contract<C>>
 where
-    C: CustomMsg + DeserializeOwned + 'static,
+    C: Clone + Debug + PartialEq + JsonSchema + 'static,
 {
     let contract =
         ContractWrapper::new_with_empty(execute, instantiate, query).with_sudo_empty(sudo);

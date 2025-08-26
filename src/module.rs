@@ -1,23 +1,16 @@
 use crate::app::CosmosRouter;
-use crate::error::{bail, AnyResult};
+use crate::error::std_error_bail;
 use crate::AppResponse;
-use cosmwasm_std::{Addr, Api, Binary, BlockInfo, CustomMsg, CustomQuery, Querier, Storage};
+use cosmwasm_std::{Addr, Api, Binary, BlockInfo, CustomQuery, Querier, StdResult, Storage};
+use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-/// # General module
-///
-/// Provides a generic interface for modules within the test environment.
-/// It is essential for creating modular and extensible testing setups,
-/// allowing developers to integrate custom functionalities
-/// or test specific scenarios.
+/// Module interface.
 pub trait Module {
-    /// Type of messages processed by the module instance.
     type ExecT;
-    /// Type of queries processed by the module instance.
     type QueryT;
-    /// Type of privileged messages used by the module instance.
     type SudoT;
 
     /// Runs any [ExecT](Self::ExecT) message,
@@ -30,9 +23,9 @@ pub trait Module {
         block: &BlockInfo,
         sender: Addr,
         msg: Self::ExecT,
-    ) -> AnyResult<AppResponse>
+    ) -> StdResult<AppResponse>
     where
-        ExecC: CustomMsg + DeserializeOwned + 'static,
+        ExecC: Debug + Clone + PartialEq + DeserializeOwned + 'static,
         QueryC: CustomQuery + DeserializeOwned + 'static;
 
     /// Runs any [QueryT](Self::QueryT) message,
@@ -44,7 +37,7 @@ pub trait Module {
         querier: &dyn Querier,
         block: &BlockInfo,
         request: Self::QueryT,
-    ) -> AnyResult<Binary>;
+    ) -> StdResult<Binary>;
 
     /// Runs privileged actions, like minting tokens, or governance proposals.
     /// This allows modules to have full access to these privileged actions,
@@ -58,28 +51,23 @@ pub trait Module {
         router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
         block: &BlockInfo,
         msg: Self::SudoT,
-    ) -> AnyResult<AppResponse>
+    ) -> StdResult<AppResponse>
     where
-        ExecC: CustomMsg + DeserializeOwned + 'static,
+        ExecC: Debug + Clone + PartialEq + DeserializeOwned + 'static,
         QueryC: CustomQuery + DeserializeOwned + 'static;
 }
-/// # Always failing module
-///
-/// This could be a diagnostic or testing tool within the Cosmos ecosystem,
-/// designed to intentionally fail during processing any message, query or privileged action.
-pub struct FailingModule<ExecT, QueryT, SudoT>(PhantomData<(ExecT, QueryT, SudoT)>);
 
-impl<ExecT, QueryT, SudoT> FailingModule<ExecT, QueryT, SudoT> {
-    /// Creates an instance of a failing module.
-    pub fn new() -> Self {
-        Self(PhantomData)
-    }
+pub struct FailingModule<ExecT, QueryT, SudoT> {
+    module_type: String,
+    _t: PhantomData<(ExecT, QueryT, SudoT)>,
 }
 
-impl<ExecT, QueryT, SudoT> Default for FailingModule<ExecT, QueryT, SudoT> {
-    /// Creates a default instance of a failing module.
-    fn default() -> Self {
-        Self::new()
+impl<ExecT, QueryT, SudoT> FailingModule<ExecT, QueryT, SudoT> {
+    pub fn new(module_type: &str) -> Self {
+        Self {
+            module_type: module_type.to_string(),
+            _t: PhantomData,
+        }
     }
 }
 
@@ -102,8 +90,13 @@ where
         _block: &BlockInfo,
         sender: Addr,
         msg: Self::ExecT,
-    ) -> AnyResult<AppResponse> {
-        bail!("Unexpected exec msg {:?} from {:?}", msg, sender)
+    ) -> StdResult<AppResponse> {
+        std_error_bail!(
+            "Unexpected exec msg {:?} from {:?} on {} module",
+            msg,
+            sender,
+            self.module_type
+        )
     }
 
     /// Runs any [QueryT](Self::QueryT) message, always returns an error.
@@ -114,8 +107,12 @@ where
         _querier: &dyn Querier,
         _block: &BlockInfo,
         request: Self::QueryT,
-    ) -> AnyResult<Binary> {
-        bail!("Unexpected custom query {:?}", request)
+    ) -> StdResult<Binary> {
+        std_error_bail!(
+            "Unexpected custom query {:?} on {} module",
+            request,
+            self.module_type
+        )
     }
 
     /// Runs any [SudoT](Self::SudoT) privileged action, always returns an error.
@@ -126,25 +123,24 @@ where
         _router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
         _block: &BlockInfo,
         msg: Self::SudoT,
-    ) -> AnyResult<AppResponse> {
-        bail!("Unexpected sudo msg {:?}", msg)
+    ) -> StdResult<AppResponse> {
+        std_error_bail!(
+            "Unexpected sudo msg {:?} on {} module",
+            msg,
+            self.module_type
+        )
     }
 }
-/// # Always accepting module
-///
-/// This struct represents a module in the Cosmos ecosystem designed to
-/// always accept all processed messages, queries and privileged actions.
+
 pub struct AcceptingModule<ExecT, QueryT, SudoT>(PhantomData<(ExecT, QueryT, SudoT)>);
 
 impl<ExecT, QueryT, SudoT> AcceptingModule<ExecT, QueryT, SudoT> {
-    /// Creates an instance of an accepting module.
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
 impl<ExecT, QueryT, SudoT> Default for AcceptingModule<ExecT, QueryT, SudoT> {
-    /// Creates an instance of an accepting module with default settings.
     fn default() -> Self {
         Self::new()
     }
@@ -169,11 +165,11 @@ where
         _block: &BlockInfo,
         _sender: Addr,
         _msg: Self::ExecT,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         Ok(AppResponse::default())
     }
 
-    /// Runs any [QueryT](Self::QueryT) message, always returns a default (empty) binary.
+    /// Runs any [QueryT](Self::QueryT) message, always returns an empty binary.
     fn query(
         &self,
         _api: &dyn Api,
@@ -181,7 +177,7 @@ where
         _querier: &dyn Querier,
         _block: &BlockInfo,
         _request: Self::QueryT,
-    ) -> AnyResult<Binary> {
+    ) -> StdResult<Binary> {
         Ok(Binary::default())
     }
 
@@ -193,7 +189,7 @@ where
         _router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
         _block: &BlockInfo,
         _msg: Self::SudoT,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         Ok(AppResponse::default())
     }
 }

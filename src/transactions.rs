@@ -1,6 +1,5 @@
-use crate::error::AnyResult;
 use cosmwasm_std::Storage;
-use cosmwasm_std::{Order, Record};
+use cosmwasm_std::{Order, Record, StdResult};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::iter;
@@ -11,9 +10,9 @@ use std::ops::{Bound, RangeBounds};
 /// This is internal as it can change any time if the map implementation is swapped out.
 type BTreeMapPairRef<'a, T = Vec<u8>> = (&'a Vec<u8>, &'a T);
 
-pub fn transactional<F, T>(base: &mut dyn Storage, action: F) -> AnyResult<T>
+pub fn transactional<F, T>(base: &mut dyn Storage, action: F) -> StdResult<T>
 where
-    F: FnOnce(&mut dyn Storage, &dyn Storage) -> AnyResult<T>,
+    F: FnOnce(&mut dyn Storage, &dyn Storage) -> StdResult<T>,
 {
     let mut cache = StorageTransaction::new(base);
     let res = action(&mut cache, base)?;
@@ -45,7 +44,7 @@ impl<'a> StorageTransaction<'a> {
     }
 }
 
-impl Storage for StorageTransaction<'_> {
+impl<'a> Storage for StorageTransaction<'a> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         match self.local_state.get(key) {
             Some(val) => match val {
@@ -56,9 +55,23 @@ impl Storage for StorageTransaction<'_> {
         }
     }
 
-    /// Range allows iteration over a set of keys, either forwards or backwards
-    /// uses standard Rust range notation, e.g. `db.range(b"foo"‥b"bar")`,
-    /// works also in reverse order.
+    fn set(&mut self, key: &[u8], value: &[u8]) {
+        let op = Op::Set {
+            key: key.to_vec(),
+            value: value.to_vec(),
+        };
+        self.local_state.insert(key.to_vec(), op.to_delta());
+        self.rep_log.append(op);
+    }
+
+    fn remove(&mut self, key: &[u8]) {
+        let op = Op::Delete { key: key.to_vec() };
+        self.local_state.insert(key.to_vec(), op.to_delta());
+        self.rep_log.append(op);
+    }
+
+    /// range allows iteration over a set of keys, either forwards or backwards
+    /// uses standard rust range notation, and eg db.range(b"foo"..b"bar") also works reverse
     fn range<'b>(
         &'b self,
         start: Option<&[u8]>,
@@ -87,21 +100,6 @@ impl Storage for StorageTransaction<'_> {
         let merged = MergeOverlay::new(local, base, order);
         Box::new(merged)
     }
-
-    fn set(&mut self, key: &[u8], value: &[u8]) {
-        let op = Op::Set {
-            key: key.to_vec(),
-            value: value.to_vec(),
-        };
-        self.local_state.insert(key.to_vec(), op.to_delta());
-        self.rep_log.append(op);
-    }
-
-    fn remove(&mut self, key: &[u8]) {
-        let op = Op::Delete { key: key.to_vec() };
-        self.local_state.insert(key.to_vec(), op.to_delta());
-        self.rep_log.append(op);
-    }
 }
 
 pub struct RepLog {
@@ -128,7 +126,7 @@ impl RepLog {
 }
 
 /// Op is the user operation, which can be stored in the RepLog.
-/// Currently: `Set` or `Delete`.
+/// Currently Set or Delete.
 enum Op {
     /// represents the `Set` operation for setting a key-value pair in storage
     Set {
@@ -259,7 +257,7 @@ mod test {
     use std::cell::RefCell;
     use std::ops::{Deref, DerefMut};
 
-    use cosmwasm_std::MemoryStorage;
+    use cosmwasm_std::testing::MockStorage as MemoryStorage;
 
     #[test]
     fn wrap_storage() {
@@ -545,17 +543,17 @@ mod test {
         let mut base = MemoryStorage::new();
         base.set(b"foo", b"bar");
 
-        let mut stx1 = StorageTransaction::new(&base);
+        let mut stxn1 = StorageTransaction::new(&base);
 
-        assert_eq!(stx1.get(b"foo"), Some(b"bar".to_vec()));
+        assert_eq!(stxn1.get(b"foo"), Some(b"bar".to_vec()));
 
-        stx1.set(b"subtx", b"works");
-        assert_eq!(stx1.get(b"subtx"), Some(b"works".to_vec()));
+        stxn1.set(b"subtx", b"works");
+        assert_eq!(stxn1.get(b"subtx"), Some(b"works".to_vec()));
 
         // Can still read from base, txn is not yet committed
         assert_eq!(base.get(b"subtx"), None);
 
-        stx1.prepare().commit(&mut base);
+        stxn1.prepare().commit(&mut base);
         assert_eq!(base.get(b"subtx"), Some(b"works".to_vec()));
     }
 

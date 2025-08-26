@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use crate::addons::MockApiBech32;
 use crate::prefixed_storage::get_full_contract_storage_namespace;
 use crate::queries::wasm::WasmRemoteQuerier;
 use crate::wasm_emulation::query::gas::{
@@ -7,7 +8,7 @@ use crate::wasm_emulation::query::gas::{
 };
 use crate::wasm_emulation::query::mock_querier::QueryResultWithGas;
 use crate::wasm_emulation::query::MockQuerier;
-use crate::{Contract, MockApiBech32};
+use crate::Contract;
 
 use crate::wasm_emulation::contract::WasmContract;
 use cosmwasm_std::testing::MockStorage;
@@ -20,7 +21,7 @@ use cosmwasm_std::{
 use cosmwasm_std::{ContractInfo, ContractResult};
 
 use cosmwasm_std::WasmQuery;
-use cw_orch_daemon::queriers::CosmWasm;
+use cw_orch::daemon::queriers::CosmWasm;
 use serde::de::DeserializeOwned;
 
 use crate::wasm_emulation::channel::RemoteChannel;
@@ -72,8 +73,14 @@ impl<
                         );
                     }
                 };
-                let response =
-                    ContractInfoResponse::new(data.code_id, data.creator, data.admin, false, None);
+                let response = ContractInfoResponse::new(
+                    data.code_id,
+                    data.creator,
+                    data.admin,
+                    false,
+                    None,
+                    None,
+                );
                 (
                     SystemResult::Ok(to_json_binary(&response).into()),
                     GasInfo::with_externally_used(GAS_COST_CONTRACT_INFO),
@@ -160,40 +167,48 @@ impl<
                 // Then, we get the corresponding wasm contract
 
                 // If the contract data is already defined in our storage, we load it from there
-                let result =
-                    if let Some(code) = self.fork_state.querier_storage.wasm.codes.get(&code_id) {
-                        // Local Wasm Contract case
-                        <WasmContract as Contract<ExecC, QueryC>>::query(
-                            code,
+                let result = if let Some(code) = self
+                    .fork_state
+                    .querier_storage
+                    .wasm
+                    .codes
+                    .get(&(code_id as usize))
+                {
+                    // Local Wasm Contract case
+                    <WasmContract as Contract<ExecC, QueryC>>::query(
+                        code,
+                        deps.as_ref(),
+                        env,
+                        msg.to_vec(),
+                        self.fork_state.clone(),
+                    )
+                } else if let Some(local_contract) = self
+                    .fork_state
+                    .local_state
+                    .contracts
+                    .get(&(code_id as usize))
+                {
+                    // Local Rust Contract case
+                    unsafe {
+                        local_contract.as_ref().unwrap().query(
                             deps.as_ref(),
                             env,
                             msg.to_vec(),
                             self.fork_state.clone(),
                         )
-                    } else if let Some(local_contract) =
-                        self.fork_state.local_state.contracts.get(&code_id)
-                    {
-                        // Local Rust Contract case
-                        unsafe {
-                            local_contract.as_ref().unwrap().query(
-                                deps.as_ref(),
-                                env,
-                                msg.to_vec(),
-                                self.fork_state.clone(),
-                            )
-                        }
-                    } else {
-                        // Distant Registered Contract case
-                        // TODO, this should be part of the cache as well
-                        // However, it's not really possible to register that data inside the App, because this is deep in the execution layer
-                        <WasmContract as Contract<ExecC, QueryC>>::query(
-                            &WasmContract::new_distant_code_id(code_id, remote.clone()),
-                            deps.as_ref(),
-                            env,
-                            msg.to_vec(),
-                            self.fork_state.clone(),
-                        )
-                    };
+                    }
+                } else {
+                    // Distant Registered Contract case
+                    // TODO, this should be part of the cache as well
+                    // However, it's not really possible to register that data inside the App, because this is deep in the execution layer
+                    <WasmContract as Contract<ExecC, QueryC>>::query(
+                        &WasmContract::new_distant_code_id(code_id, remote.clone()),
+                        deps.as_ref(),
+                        env,
+                        msg.to_vec(),
+                        self.fork_state.clone(),
+                    )
+                };
 
                 let result = match result {
                     Err(e) => {
@@ -214,7 +229,12 @@ impl<
                 )
             }
             WasmQuery::CodeInfo { code_id } => {
-                let code_data = self.fork_state.querier_storage.wasm.code_data.get(code_id);
+                let code_data = self
+                    .fork_state
+                    .querier_storage
+                    .wasm
+                    .code_data
+                    .get(&(*code_id as usize));
                 let res = if let Some(code_data) = code_data {
                     cosmwasm_std::CodeInfoResponse::new(
                         *code_id,

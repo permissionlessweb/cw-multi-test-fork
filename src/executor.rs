@@ -1,35 +1,29 @@
-use crate::error::AnyResult;
 use cosmwasm_std::{
-    to_json_binary, Addr, Attribute, BankMsg, Binary, Coin, CosmosMsg, CustomMsg, Event,
+    to_json_binary, Addr, Attribute, BankMsg, Binary, Coin, CosmosMsg, Event, StdResult,
     SubMsgResponse, WasmMsg,
 };
 use cw_utils::{parse_execute_response_data, parse_instantiate_response_data};
+use schemars::JsonSchema;
 use serde::Serialize;
 use std::fmt::Debug;
 
-/// A subset of data returned as a response of a contract entry point,
-/// such as `instantiate`, `execute` or `migrate`.
 #[derive(Default, Clone, Debug)]
 pub struct AppResponse {
-    /// Response events.
     pub events: Vec<Event>,
-    /// Response data.
     pub data: Option<Binary>,
 }
 
 impl AppResponse {
-    /// Returns all custom attributes returned by the contract in the `idx` event.
-    ///
-    /// We assert the type is wasm, and skip the contract_address attribute.
+    // Return all custom attributes returned by the contract in the `idx` event.
+    // We assert the type is wasm, and skip the contract_address attribute.
     #[track_caller]
     pub fn custom_attrs(&self, idx: usize) -> &[Attribute] {
         assert_eq!(self.events[idx].ty.as_str(), "wasm");
         &self.events[idx].attributes[1..]
     }
 
-    /// Checks if there is an Event that is a super-set of this.
-    ///
-    /// It has the same type, and all compared attributes are included in it as well.
+    /// Check if there is an Event that is a super-set of this.
+    /// It has the same type, and all compare.attributes are included in it as well.
     /// You don't need to specify them all.
     pub fn has_event(&self, expected: &Event) -> bool {
         self.events.iter().any(|ev| {
@@ -41,7 +35,7 @@ impl AppResponse {
         })
     }
 
-    /// Like [has_event](Self::has_event) but panics if there is no match.
+    /// Like has_event but panics if no match
     #[track_caller]
     pub fn assert_event(&self, expected: &Event) {
         assert!(
@@ -53,7 +47,7 @@ impl AppResponse {
     }
 }
 
-/// They have the same shape, SubMsgResponse is what is returned in reply.
+/// They have the same shape, SubMsgExecutionResponse is what is returned in reply.
 /// This is just to make some test cases easier.
 impl From<SubMsgResponse> for AppResponse {
     fn from(reply: SubMsgResponse) -> Self {
@@ -64,20 +58,15 @@ impl From<SubMsgResponse> for AppResponse {
         }
     }
 }
-/// A trait defining a default behavior of the message executor.
-///
-/// Defines the interface for executing transactions and contract interactions.
-/// It is a central component in the testing framework, managing the operational
-/// flow and ensuring that contract _calls_ are processed correctly.
+
 pub trait Executor<C>
 where
-    C: CustomMsg + 'static,
+    C: Clone + Debug + PartialEq + 'static,
 {
-    /// Processes (executes) an arbitrary `CosmosMsg`.
-    /// This will create a cache before the execution,
-    /// so no state changes are persisted if this returns an error,
-    /// but all are persisted on success.
-    fn execute(&mut self, sender: Addr, msg: CosmosMsg<C>) -> AnyResult<AppResponse>;
+    /// Runs arbitrary CosmosMsg.
+    /// This will create a cache before the execution, so no state changes are persisted if this
+    /// returns an error, but all are persisted on success.
+    fn execute(&mut self, sender: Addr, msg: CosmosMsg<C>) -> StdResult<AppResponse>;
 
     /// Create a contract and get the new address.
     /// This is just a helper around execute()
@@ -89,7 +78,7 @@ where
         send_funds: &[Coin],
         label: U,
         admin: Option<String>,
-    ) -> AnyResult<Addr> {
+    ) -> StdResult<Addr> {
         // instantiate contract
         let init_msg = to_json_binary(init_msg)?;
         let msg = WasmMsg::Instantiate {
@@ -107,7 +96,6 @@ where
     /// Instantiates a new contract and returns its predictable address.
     /// This is a helper function around [execute][Self::execute] function
     /// with `WasmMsg::Instantiate2` message.
-    #[cfg(feature = "cosmwasm_1_2")]
     fn instantiate2_contract<M, L, A, S>(
         &mut self,
         code_id: u64,
@@ -117,7 +105,7 @@ where
         label: L,
         admin: A,
         salt: S,
-    ) -> AnyResult<Addr>
+    ) -> StdResult<Addr>
     where
         M: Serialize,
         L: Into<String>,
@@ -139,16 +127,15 @@ where
     }
 
     /// Execute a contract and process all returned messages.
-    /// This is just a helper function around [execute()](Self::execute)
-    /// with `WasmMsg::Execute` message, but in this case we parse out the data field
-    /// to that what is returned by the contract (not the protobuf wrapper).
+    /// This is just a helper around execute(),
+    /// but we parse out the data field to that what is returned by the contract (not the protobuf wrapper)
     fn execute_contract<T: Serialize + Debug>(
         &mut self,
         sender: Addr,
         contract_addr: Addr,
         msg: &T,
         send_funds: &[Coin],
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         let binary_msg = to_json_binary(msg)?;
         let wrapped_msg = WasmMsg::Execute {
             contract_addr: contract_addr.into_string(),
@@ -162,17 +149,15 @@ where
         Ok(res)
     }
 
-    /// Migrates a contract.
-    /// Sender must be registered admin.
-    /// This is just a helper function around [execute()](Self::execute)
-    /// with `WasmMsg::Migrate` message.
+    /// Migrate a contract. Sender must be registered admin.
+    /// This is just a helper around execute()
     fn migrate_contract<T: Serialize>(
         &mut self,
         sender: Addr,
         contract_addr: Addr,
         msg: &T,
         new_code_id: u64,
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         let msg = to_json_binary(msg)?;
         let msg = WasmMsg::Migrate {
             contract_addr: contract_addr.into(),
@@ -182,15 +167,12 @@ where
         self.execute(sender, msg.into())
     }
 
-    /// Sends tokens to specified recipient.
-    /// This is just a helper function around [execute()](Self::execute)
-    /// with `BankMsg::Send` message.
     fn send_tokens(
         &mut self,
         sender: Addr,
         recipient: Addr,
         amount: &[Coin],
-    ) -> AnyResult<AppResponse> {
+    ) -> StdResult<AppResponse> {
         let msg = BankMsg::Send {
             to_address: recipient.to_string(),
             amount: amount.to_vec(),

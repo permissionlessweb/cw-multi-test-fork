@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use cosmwasm_std::Addr;
 use cosmwasm_std::{Env, MessageInfo, Reply};
@@ -13,8 +13,8 @@ use super::contract::WasmContract;
 #[derive(Debug, Clone, Default)]
 pub struct WasmStorage {
     pub contracts: HashMap<String, ContractData>,
-    pub codes: BTreeMap<u64, WasmContract>,
-    pub code_data: BTreeMap<u64, CodeData>,
+    pub codes: HashMap<usize, WasmContract>,
+    pub code_data: HashMap<usize, CodeData>,
     pub storage: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
@@ -100,6 +100,7 @@ pub struct ReplyArgs {
 pub struct MigrateArgs {
     pub env: Env,
     pub msg: Vec<u8>,
+    pub info: MessageInfo,
 }
 
 impl WasmFunction {

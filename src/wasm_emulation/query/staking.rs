@@ -38,7 +38,9 @@ impl StakingQuerier {
                 to_json_binary(&res).into()
             }
             StakingQuery::AllValidators {} => {
-                let res = AllValidatorsResponse::new(self.validators.clone());
+                let res = &AllValidatorsResponse::new(
+                    self.validators.clone().into_iter().map(Into::into).collect(),
+                );
                 to_json_binary(&res).into()
             }
             StakingQuery::Validator { address } => {

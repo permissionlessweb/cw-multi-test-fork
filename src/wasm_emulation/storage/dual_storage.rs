@@ -3,10 +3,10 @@ use crate::wasm_emulation::storage::mock_storage::{GAS_COST_LAST_ITERATION, GAS_
 use crate::wasm_emulation::storage::CLONE_TESTING_STORAGE_LOG;
 
 use super::mock_storage::MockStorage;
-use cosmrs::proto::cosmos::base::query::v1beta1::PageRequest;
-use cosmrs::proto::cosmwasm::wasm::v1::Model;
-use cosmwasm_std::Record;
+use cosmos_sdk_proto::cosmos::base::query::v1beta1::PageRequest;
+use cosmos_sdk_proto::cosmwasm::wasm::v1::Model;
 use cosmwasm_std::{Addr, Order};
+use cosmwasm_std::{Record, StdResult};
 use cosmwasm_vm::BackendError;
 use cosmwasm_vm::BackendResult;
 use cosmwasm_vm::GasInfo;
@@ -15,7 +15,7 @@ use num_bigint::{BigInt, Sign};
 use std::collections::HashMap;
 use std::iter;
 
-use cw_orch_daemon::queriers::CosmWasm;
+use cw_orch::daemon::queriers::CosmWasm;
 
 fn get_key_bigint(mut key1: Vec<u8>, mut key2: Vec<u8>) -> (BigInt, BigInt) {
     if key1.len() >= key2.len() {
@@ -43,7 +43,6 @@ fn _gt(key1: Vec<u8>, key2: Vec<u8>) -> bool {
 
 use std::collections::HashSet;
 
-use anyhow::Result as AnyResult;
 const DISTANT_LIMIT: u64 = 5u64;
 
 #[derive(Default, Debug, Clone)]
@@ -76,7 +75,7 @@ impl DualStorage {
         remote: RemoteChannel,
         contract_addr: String,
         init: Option<Vec<(Vec<u8>, Vec<u8>)>>,
-    ) -> AnyResult<DualStorage> {
+    ) -> StdResult<DualStorage> {
         // We create an instance from a code_id, an address, and we run the code in it
 
         let mut local_storage = MockStorage::default();
@@ -93,7 +92,7 @@ impl DualStorage {
         })
     }
 
-    pub fn get_all_storage(&mut self) -> AnyResult<Vec<(Vec<u8>, Vec<u8>)>> {
+    pub fn get_all_storage(&mut self) -> StdResult<Vec<(Vec<u8>, Vec<u8>)>> {
         let iterator_id = self.local_storage.scan(None, None, Order::Ascending).0?;
         let all_records = self.local_storage.all(iterator_id);
 

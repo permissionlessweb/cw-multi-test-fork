@@ -1,6 +1,7 @@
 use crate::{Contract, ContractWrapper};
-use cosmwasm_std::{Binary, CustomMsg, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError};
-use serde::de::DeserializeOwned;
+use cosmwasm_std::{Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError};
+use schemars::JsonSchema;
+use std::fmt::Debug;
 
 fn instantiate_err(
     _deps: DepsMut,
@@ -35,7 +36,7 @@ fn query(_deps: Deps, _env: Env, _msg: Empty) -> Result<Binary, StdError> {
 
 pub fn contract<C>(instantiable: bool) -> Box<dyn Contract<C>>
 where
-    C: CustomMsg + DeserializeOwned + 'static,
+    C: Clone + Debug + PartialEq + JsonSchema + 'static,
 {
     let contract = if instantiable {
         ContractWrapper::new_with_empty(execute, instantiate_ok, query)

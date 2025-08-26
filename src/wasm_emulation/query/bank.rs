@@ -1,30 +1,28 @@
 use crate::wasm_emulation::channel::RemoteChannel;
 use crate::wasm_emulation::query::gas::{GAS_COST_ALL_BALANCE_QUERY, GAS_COST_BALANCE_QUERY};
 use crate::wasm_emulation::query::mock_querier::QueryResultWithGas;
-use cosmwasm_std::{Addr, SupplyResponse};
+use cosmwasm_std::{Addr, Uint256};
 use cosmwasm_vm::GasInfo;
 
 use cw_utils::NativeBalance;
 
-use cw_orch_daemon::queriers::Bank;
+use cw_orch::daemon::queriers::Bank;
 
 use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
 use std::collections::HashMap;
 
 use cosmwasm_std::Uint128;
-use cosmwasm_std::{AllBalanceResponse, BalanceResponse, BankQuery};
+use cosmwasm_std::{BalanceResponse, BankQuery};
 
 use cosmwasm_std::to_json_binary;
 use cosmwasm_std::{ContractResult, SystemResult};
-
-use super::gas::GAS_COST_SUPPLY_QUERY;
 
 #[derive(Clone)]
 pub struct BankQuerier {
     #[allow(dead_code)]
     /// HashMap<denom, amount>
-    supplies: HashMap<String, Uint128>,
+    supplies: HashMap<String, Uint256>,
     /// HashMap<address, coins>
     balances: HashMap<String, Vec<Coin>>,
     remote: RemoteChannel,
@@ -55,7 +53,7 @@ impl BankQuerier {
         result
     }
 
-    fn calculate_supplies(balances: &HashMap<String, Vec<Coin>>) -> HashMap<String, Uint128> {
+    fn calculate_supplies(balances: &HashMap<String, Vec<Coin>>) -> HashMap<String, Uint256> {
         let mut supplies = HashMap::new();
 
         let all_coins = balances.iter().flat_map(|(_, coins)| coins);
@@ -63,7 +61,7 @@ impl BankQuerier {
         for coin in all_coins {
             *supplies
                 .entry(coin.denom.clone())
-                .or_insert_with(Uint128::zero) += coin.amount;
+                .or_insert_with(Uint256::zero) += coin.amount;
         }
 
         supplies
@@ -100,49 +98,35 @@ impl BankQuerier {
                 });
                 to_json_binary(&bank_res).into()
             }
-            BankQuery::AllBalances { address } => {
-                // proper error on not found, serialize result on found
-                let mut amount = self.balances.get(address).cloned();
+            // BankQuery::AllBalances { address } => {
+            //     // proper error on not found, serialize result on found
+            //     let mut amount = self.balances.get(address).cloned();
 
-                // We query only if the bank balance doesn't exist
-                if amount.is_none() {
-                    let querier = Bank {
-                        channel: self.remote.channel.clone(),
-                        rt_handle: Some(self.remote.rt.clone()),
-                    };
-                    let query_result: Result<Vec<Coin>, _> = self
-                        .remote
-                        .rt
-                        .block_on(querier._balance(&Addr::unchecked(address), None));
-                    if let Ok(distant_amount) = query_result {
-                        amount = Some(distant_amount)
-                    }
-                }
+            //     // We query only if the bank balance doesn't exist
+            //     if amount.is_none() {
+            //         let querier = Bank {
+            //             channel: self.remote.channel.clone(),
+            //             rt_handle: Some(self.remote.rt.clone()),
+            //         };
+            //         let query_result: Result<Vec<Coin>, _> = self
+            //             .remote
+            //             .rt
+            //             .block_on(querier._balance(&Addr::unchecked(address), None));
+            //         if let Ok(distant_amount) = query_result {
+            //             amount = Some(distant_amount)
+            //         }
+            //     }
 
-                let bank_res = AllBalanceResponse::new(amount.unwrap());
-                to_json_binary(&bank_res).into()
-            }
-            BankQuery::Supply { denom } => {
-                let supply_clone = self.supplies.get(denom).cloned().unwrap_or_default();
-                let querier = Bank {
-                    channel: self.remote.channel.clone(),
-                    rt_handle: Some(self.remote.rt.clone()),
-                };
-                let query_result: Result<Coin, _> =
-                    self.remote.rt.block_on(querier._supply_of(denom));
-                let mut supply = query_result.unwrap_or(Coin::new(Uint128::zero(), denom));
-                supply.amount += supply_clone;
-                let supply_res = SupplyResponse::new(supply);
-                to_json_binary(&supply_res).into()
-            }
+            //     let bank_res = AllBalanceResponse::new(amount.unwrap());
+            //     to_json_binary(&bank_res).into()
+            // }
             &_ => panic!("Not implemented {:?}", request),
         };
 
         // We handle the gas_info
         let gas_info = match request {
             BankQuery::Balance { .. } => GAS_COST_BALANCE_QUERY,
-            BankQuery::AllBalances { .. } => GAS_COST_ALL_BALANCE_QUERY,
-            BankQuery::Supply { .. } => GAS_COST_SUPPLY_QUERY,
+            // BankQuery::AllBalances { .. } => GAS_COST_ALL_BALANCE_QUERY,
             &_ => panic!("Not implemented {:?}", request),
         };
 

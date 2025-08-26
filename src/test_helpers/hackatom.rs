@@ -1,26 +1,27 @@
 //! Simplified contract which when executed releases the funds to beneficiary
 
 use crate::{Contract, ContractWrapper};
-use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    to_json_binary, BankMsg, Binary, CustomMsg, Deps, DepsMut, Empty, Env, MessageInfo, Response,
-    StdError,
+    to_json_binary, BankMsg, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError,
 };
 use cw_storage_plus::Item;
-use serde::de::DeserializeOwned;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
-#[cw_serde]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstantiateMsg {
     pub beneficiary: String,
 }
 
-#[cw_serde]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MigrateMsg {
-    // just use some other string, so we see there are other types
+    // just use some other string so we see there are other types
     pub new_guy: String,
 }
 
-#[cw_serde]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     // returns InstantiateMsg
     Beneficiary {},
@@ -76,7 +77,7 @@ pub fn contract() -> Box<dyn Contract<Empty>> {
 #[allow(dead_code)]
 pub fn custom_contract<C>() -> Box<dyn Contract<C>>
 where
-    C: CustomMsg + DeserializeOwned + 'static,
+    C: Clone + Debug + PartialEq + JsonSchema + 'static,
 {
     let contract =
         ContractWrapper::new_with_empty(execute, instantiate, query).with_migrate_empty(migrate);

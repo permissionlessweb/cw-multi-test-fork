@@ -1,13 +1,13 @@
-use clone_cw_multi_test::wasm_emulation::query::ContainsRemote;
 use clone_cw_multi_test::{
     wasm_emulation::channel::RemoteChannel, AppBuilder, BankKeeper, Executor, WasmKeeper,
 };
 use cosmwasm_std::Addr;
+use cosmwasm_std::StdResult;
 use cw20::AllAccountsResponse;
 use cw20::Cw20ExecuteMsg;
 
 use cw20::Cw20QueryMsg;
-use cw_orch_daemon::networks::PHOENIX_1;
+use cw_orch::daemon::networks::PHOENIX_1;
 
 use cosmwasm_std::Empty;
 use tokio::runtime::Runtime;
@@ -16,7 +16,7 @@ pub fn main() {
     test().unwrap()
 }
 
-pub fn test() -> anyhow::Result<()> {
+pub fn test() -> StdResult<()> {
     env_logger::init();
 
     let runtime = Runtime::new()?;
@@ -36,7 +36,7 @@ pub fn test() -> anyhow::Result<()> {
         .with_wasm(wasm)
         .with_bank(bank)
         .with_remote(remote_channel)
-        .build(|_, _, _| {});
+        .build(|_, _, _| {})?;
 
     // Then we send a message to the blockchain through the app
     let sender = "terra17c6ts8grcfrgquhj3haclg44le8s7qkx6l2yx33acguxhpf000xqhnl3je";

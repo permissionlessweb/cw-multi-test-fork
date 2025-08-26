@@ -1,11 +1,11 @@
 [package]
 name = "clone-cw-multi-test"
-version = "0.7.0"
+version = "3.0.1"
 authors = [
     "Ethan Frey <ethanfrey@users.noreply.github.com>",
-    "Dariusz Depta <DariuszDepta@users.noreply.github.com>",
+    "Dariusz Depta <depta@engos.de>",
 ]
-description = "Testing tools for multi-contract interactions. Helps simulating chain behavior with on-chain storage locally"
+description = "Testing tools for multi-contract interactions"
 repository = "https://github.com/CosmWasm/cw-multi-test"
 homepage = "https://cosmwasm.com"
 license = "Apache-2.0"
@@ -15,8 +15,7 @@ edition = "2021"
 all-features = true
 
 [features]
-default = []
-backtrace = ["anyhow/backtrace"]
+default = ["staking", "stargate", "cosmwasm_3_0"]
 staking = ["cosmwasm-std/staking"]
 stargate = ["cosmwasm-std/stargate"]
 cosmwasm_1_1 = ["cosmwasm-std/cosmwasm_1_1"]
@@ -25,50 +24,51 @@ cosmwasm_1_3 = ["cosmwasm_1_2", "cosmwasm-std/cosmwasm_1_3"]
 cosmwasm_1_4 = ["cosmwasm_1_3", "cosmwasm-std/cosmwasm_1_4"]
 cosmwasm_2_0 = ["cosmwasm_1_4", "cosmwasm-std/cosmwasm_2_0"]
 cosmwasm_2_1 = ["cosmwasm_2_0", "cosmwasm-std/cosmwasm_2_1"]
-tokenfactory = [
-    "dep:osmosis-std-derive",
-    "dep:chrono",
-    "dep:prost-types",
-    "dep:serde-cw-value",
-]
+cosmwasm_2_2 = ["cosmwasm_2_1", "cosmwasm-std/cosmwasm_2_2"]
+cosmwasm_3_0 = ["cosmwasm_2_2", "cosmwasm-std/cosmwasm_3_0"]
 
 [dependencies]
-anyhow = "1.0.89"
+cosmos_sdk_proto  =  { package = "cosmos-sdk-proto", version =  "0.28.0", git = "https://github.com/permissionlessweb/cosmos-rust" }
 bech32 = "0.11.0"
-cosmwasm-schema = "2.1.3"
-cosmwasm-std = "2.1.4"
-cw-storage-plus = "2.0.0"
-cw-utils = "2.0.0"
+cosmwasm-schema = "3.0.0"
+cosmwasm-std = "3.0.1"
+cw-storage-plus = "3.0.0"
+cw-utils = "3.0.0"
+derivative = "2.2.0"
 itertools = "0.13.0"
-prost = "0.13.3"
-schemars = "0.8.21"
+prost = "0.14.1"
+schemars = "0.8.4"
 serde = "1.0.210"
 sha2 = "0.10.8"
 thiserror = "1.0.64"
 
+serde_json = "1.0.40"
+log = "0.4.20"
+cw20-ics20 = {  git = "https://github.com/permissionlessweb/cw-plus", branch = "bump/v3", features = ["library"] }
+hex = "0.4.3"
+tiny-keccak = { version = "2.0.2", features = ["keccak"] }
+
 # Clone testing deps
 ## Network
-cw-orch-daemon = { version = "0.29.1" }
-tokio = "1.28.2"
-tonic = "0.12.2"
+cw-orch = { version = "0.30.0", features = ["daemon"], path = "../cw-orchestrator/cw-orch" }
+tokio   = { version = "1.39.0" }
+tonic   = { version = "0.14.1" }
 
 ## Emulation
-cosmwasm-vm = { version = "=2.2.0", features = [
+cosmwasm-vm = { version = "=3.0.0", features = [
     "staking",
     "stargate",
     "iterator",
 ] }
 
 ## Dual Storage
-cosmrs = "0.19.0"
+cosmrs =  { version = "0.23.0", git = "https://github.com/permissionlessweb/cosmos-rust", features = ["cosmwasm"] }
 num-bigint = "0.4.3"
 
 # Analyzer
 treediff = { version = "4.0.2", features = ["with-rustc-serialize"] }
 rustc-serialize = "0.3.24"
-serde_json = "1.0.105"
-log = "0.4.19"
-wasmer = { version = "4.3.0", default-features = false, features = [
+wasmer = { version = "=5.0.6", default-features = false, features = [
     "cranelift",
     "singlepass",
 ] }
@@ -77,25 +77,15 @@ wasmer = { version = "4.3.0", default-features = false, features = [
 cargo_metadata = "0.18" # For finding Cargo target dir
 file-lock = "2.1"
 
-# For tokenfactory
-osmosis-std-derive = { version = "0.26.0", optional = true }
-prost-types = { version = "0.13.4", optional = true }
-serde-cw-value = { version = "0.7.0", optional = true }
-chrono = { version = "0.4.39", optional = true }
-cw-orch = "0.27.0"
 
 [dev-dependencies]
 hex = "0.4.3"
 hex-literal = "0.4.1"
-once_cell = "1.19.0"
-
-# Clone testing deps
-
-# General
+once_cell = "1.20.2"
+# general
 env_logger = "0.10.0"
-cosmwasm-schema = "2.1.3"
-
+ 
 # Cavern Test App
-cw20 = "2.0.0"
 moneymarket = { git = "https://github.com/CavernPerson/money-market-contracts" }
-cw2 = "2.0.0"
+cw20  =  { version = "2.0.0",  git = "https://github.com/permissionlessweb/cw-plus" }
+cw2 =  { version = "3.0.0", git = "https://github.com/permissionlessweb/cw-minus" }

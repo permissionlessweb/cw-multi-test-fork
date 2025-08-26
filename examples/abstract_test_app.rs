@@ -4,7 +4,7 @@
 // use cosmwasm_std::coins;
 // use cosmwasm_std::Timestamp;
 // use cosmwasm_std::Uint128;
-// use cw_orch_daemon::queriers::Node;
+// use cw_orch::daemon::queriers::Node;
 // use cw_orch_daemon::DaemonQuerier;
 // use tokio::runtime::Runtime;
 
@@ -42,7 +42,7 @@
 // use abstract_interface::ManagerQueryFns;
 // use cosmwasm_std::Empty;
 // use cw_multi_test::WasmKeeper;
-// use cw_orch_daemon::Daemon;
+// use cw_orch::daemon::Daemon;
 // use cw_orch::deploy::Deploy;
 
 // use cw_orch_daemon::prelude::ContractInstance;
@@ -61,7 +61,7 @@
 //     dotenv().ok();
 //     let runtime = tokio::runtime::Runtime::new().unwrap();
 
-//     let mut chain = cw_orch_daemon::networks::JUNO_1;
+//     let mut chain = cw_orch::daemon::networks::JUNO_1;
 //     chain.grpc_urls = &["http://juno-grpc.polkachu.com:12690"];
 
 //     let daemon = Daemon::builder()

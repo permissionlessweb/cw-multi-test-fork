@@ -1,7 +1,6 @@
 // Bank
 pub const GAS_COST_BALANCE_QUERY: u64 = 1000;
 pub const GAS_COST_ALL_BALANCE_QUERY: u64 = 10000;
-pub const GAS_COST_SUPPLY_QUERY: u64 = 1000;
 
 // Staking
 pub const GAS_COST_BONDED_DENOM: u64 = 100;
