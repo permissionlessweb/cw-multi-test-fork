@@ -98,17 +98,19 @@ where
         result: SubMsgResult::Ok(SubMsgResponse {
             data: Some(data), ..
         }),
+        payload,
+        gas_used,
     } = msg
     {
         // We parse out the WasmMsg::Execute wrapper...
         // TODO: Handle all of Execute, Instantiate, and BankMsg replies differently.
         let parsed_data = if id < EXECUTE_REPLY_BASE_ID {
             parse_instantiate_response_data(data.as_slice())
-                .map_err(|e| StdError::generic_err(e.to_string()))?
+                .map_err(|e| StdError::msg(e.to_string()))?
                 .data
         } else {
             parse_execute_response_data(data.as_slice())
-                .map_err(|e| StdError::generic_err(e.to_string()))?
+                .map_err(|e| StdError::msg(e.to_string()))?
                 .data
         };
 

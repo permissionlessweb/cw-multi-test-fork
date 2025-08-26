@@ -23,7 +23,7 @@ fn execute(_deps: DepsMut, _env: Env, _info: MessageInfo, msg: ExecMsg) -> StdRe
     } else {
         GovMsg::Vote {
             proposal_id: 1,
-            vote: cosmwasm_std::VoteOption::No,
+            option: cosmwasm_std::VoteOption::No,
         }
         .into()
     };

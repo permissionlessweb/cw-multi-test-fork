@@ -4,7 +4,10 @@ use cosmwasm_std::{Addr, Empty};
 
 #[test]
 fn default_ibc() {
-    let mut app = App::default();
+    let mut app = AppBuilder::new()
+        .with_ibc(IbcAcceptingModule::new())
+        .build(|_, _, _| ())
+        .unwrap();
     let code = app.store_code(stargate::contract());
     let contract = app
         .instantiate_contract(
@@ -25,7 +28,8 @@ fn default_ibc() {
 fn substituting_ibc() {
     let mut app = AppBuilder::new()
         .with_ibc(IbcAcceptingModule::new())
-        .build(|_, _, _| ());
+        .build(|_, _, _| ())
+        .unwrap();
     let code = app.store_code(stargate::contract());
     let contract = app
         .instantiate_contract(
