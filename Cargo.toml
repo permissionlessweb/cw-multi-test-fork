@@ -44,7 +44,7 @@ thiserror = "1.0.64"
 
 serde_json = "1.0.40"
 log = "0.4.20"
-cw20-ics20 = {  git = "https://github.com/permissionlessweb/cw-plus", branch = "bump/v3", features = ["library"] }
+cw20-ics20 = {  git = "https://github.com/permissionlessweb/cw-plus", features = ["library"] }
 hex = "0.4.3"
 tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 

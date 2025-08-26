@@ -35,6 +35,6 @@ pub fn contract<C>() -> Box<dyn Contract<C>>
 where
     C: Clone + Debug + PartialEq + JsonSchema + 'static,
 {
-    let contract = ContractWrapper::new_with_empty(execute, instantiate, query);
+    let contract = ContractWrapper::new(execute, instantiate, query);
     Box::new(contract)
 }
