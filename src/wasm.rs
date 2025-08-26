@@ -20,9 +20,9 @@ use crate::wasm_emulation::query::AllWasmQuerier;
 use cosmwasm_std::testing::mock_wasmd_attr;
 use cosmwasm_std::{
     to_json_binary, Addr, Api, Attribute, BankMsg, Binary, BlockInfo, Coin, ContractInfo,
-    ContractInfoResponse, CustomQuery, Deps, DepsMut, Env, Event, MessageInfo, Order, Querier,
-    QuerierWrapper, Record, Reply, ReplyOn, Response, StdError, StdResult, Storage, SubMsg,
-    SubMsgResponse, SubMsgResult, TransactionInfo, WasmMsg, WasmQuery,
+    ContractInfoResponse, CustomQuery, Deps, DepsMut, Env, Event, MessageInfo, MigrateInfo, Order,
+    Querier, QuerierWrapper, Record, Reply, ReplyOn, Response, StdError, StdResult, Storage,
+    SubMsg, SubMsgResponse, SubMsgResult, TransactionInfo, WasmMsg, WasmQuery,
 };
 use cosmwasm_std::{Checksum, CustomMsg};
 use cw_storage_plus::Map;
@@ -720,9 +720,9 @@ where
                 // then call migrate
                 let querier_storage = router.get_querier_storage(storage)?;
 
-                let info = MessageInfo {
+                let info = MigrateInfo {
                     sender,
-                    funds: vec![],
+                    old_migrate_version: None,
                 };
 
                 let res = self.call_migrate(
@@ -1191,7 +1191,7 @@ where
         address: Addr,
         api: &dyn Api,
         storage: &mut dyn Storage,
-        info: MessageInfo,
+        info: MigrateInfo,
         router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
         block: &BlockInfo,
         msg: Vec<u8>,
@@ -1207,15 +1207,15 @@ where
                 ContractBox::Borrowed(contract) => contract.migrate(
                     deps,
                     env.clone(),
-                    info,
                     msg,
+                    info,
                     self.fork_state(querier_storage, &env)?,
                 ),
                 ContractBox::Owned(contract) => contract.migrate(
                     deps,
                     env.clone(),
-                    info,
                     msg,
+                    info,
                     self.fork_state(querier_storage, &env)?,
                 ),
             },
