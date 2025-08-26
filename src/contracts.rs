@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 
 use cosmwasm_std::{
     from_json, Binary, Checksum, CustomMsg, CustomQuery, Deps, DepsMut, Empty, Env, MessageInfo,
-    QuerierWrapper, Reply, Response, StdError, StdResult,
+    MigrateInfo, QuerierWrapper, Reply, Response, StdError, StdResult,
 };
 
 use serde::de::DeserializeOwned;
@@ -75,7 +75,7 @@ where
         &self,
         deps: DepsMut<Q>,
         env: Env,
-        info: MessageInfo,
+        info: MigrateInfo,
         msg: Vec<u8>,
         fork_state: ForkState<T, Q>,
     ) -> StdResult<Response<T>>;
@@ -387,7 +387,7 @@ where
         &self,
         deps: DepsMut<Q>,
         env: Env,
-        _info: MessageInfo,
+        _info: MigrateInfo,
         msg: Vec<u8>,
         fork_state: ForkState<C, Q>,
     ) -> StdResult<Response<C>> {
