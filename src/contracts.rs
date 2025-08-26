@@ -75,8 +75,8 @@ where
         &self,
         deps: DepsMut<Q>,
         env: Env,
-        info: MigrateInfo,
         msg: Vec<u8>,
+        info: MigrateInfo,
         fork_state: ForkState<T, Q>,
     ) -> StdResult<Response<T>>;
 
@@ -387,8 +387,8 @@ where
         &self,
         deps: DepsMut<Q>,
         env: Env,
-        _info: MigrateInfo,
         msg: Vec<u8>,
+        _info: MigrateInfo,
         fork_state: ForkState<C, Q>,
     ) -> StdResult<Response<C>> {
         let querier = MockQuerier::new(fork_state.clone());

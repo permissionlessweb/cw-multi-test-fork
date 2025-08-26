@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, MigrateInfo};
 use cosmwasm_std::{Env, MessageInfo, Reply};
 
 use cw_utils::NativeBalance;
@@ -100,7 +100,7 @@ pub struct ReplyArgs {
 pub struct MigrateArgs {
     pub env: Env,
     pub msg: Vec<u8>,
-    pub info: MessageInfo,
+    pub info: MigrateInfo,
 }
 
 impl WasmFunction {

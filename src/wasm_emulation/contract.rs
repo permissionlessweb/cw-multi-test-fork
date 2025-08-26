@@ -6,6 +6,7 @@ use crate::wasm_emulation::query::MockQuerier;
 use crate::wasm_emulation::storage::DualStorage;
 use cosmwasm_std::Checksum;
 use cosmwasm_std::CustomMsg;
+use cosmwasm_std::MigrateInfo;
 use cosmwasm_std::StdError;
 use cosmwasm_std::StdResult;
 use cosmwasm_vm::WasmLimits;
@@ -352,12 +353,12 @@ where
         &self,
         deps: DepsMut<QueryC>,
         env: Env,
-        info: MessageInfo,
         msg: Vec<u8>,
+        info: MigrateInfo,
         fork_state: ForkState<ExecC, QueryC>,
     ) -> StdResult<Response<ExecC>> {
         let migrate_args = InstanceArguments {
-            function: WasmFunction::Migrate(MigrateArgs { env, info, msg }),
+            function: WasmFunction::Migrate(MigrateArgs { env, msg, info }),
             init_storage: deps.storage.range(None, None, Order::Ascending).collect(),
         };
 
