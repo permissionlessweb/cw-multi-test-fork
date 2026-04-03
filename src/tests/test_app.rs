@@ -12,9 +12,9 @@ use crate::{
 };
 use cosmwasm_std::testing::{mock_env, MockQuerier};
 use cosmwasm_std::{
-    coin, coins, from_json, to_json_binary, Addr, AllBalanceResponse, Api, Attribute, BankMsg,
-    BankQuery, Binary, BlockInfo, Coin, CosmosMsg, CustomQuery, Empty, Event, OverflowError,
-    OverflowOperation, Querier, Reply, StdError, StdResult, Storage, SubMsg, WasmMsg,
+    coin, coins, from_json, to_json_binary, Addr, Api, Attribute, BankMsg, BankQuery, Binary,
+    BlockInfo, Coin, CosmosMsg, CustomQuery, Empty, Event, OverflowError, OverflowOperation,
+    Querier, Reply, StdError, StdResult, Storage, SubMsg, WasmMsg,
 };
 use cw_storage_plus::Item;
 use cw_utils::parse_instantiate_response_data;
@@ -1659,6 +1659,7 @@ mod custom_messages {
 mod protobuf_wrapped_data {
     use super::*;
     use crate::BasicApp;
+    use crate::wasm_emulation::channel::RemoteChannel;
 
     #[test]
     fn instantiate_wrapped_properly() {
@@ -1701,7 +1702,7 @@ mod protobuf_wrapped_data {
     #[test]
     fn instantiate_with_data_works() {
         let owner = Addr::unchecked("owner");
-        let mut app = BasicApp::new(|_, _, _| {});
+        let mut app = BasicApp::new(RemoteChannel::new().unwrap(),|_, _, _| {});
 
         // set up echo contract
         let code_id = app.store_code(echo::contract());
