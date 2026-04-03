@@ -32,10 +32,10 @@ bech32 = "0.11.0"
 cosmwasm-schema = "3.0.0"
 cosmwasm-std = "3.0.1"
 cw-storage-plus = "3.0.0"
-cw-utils = "3.0.0"
+cw-utils = { path = "../cw-minus/packages/cw-utils" }
 itertools = "0.14.0"
 prost = "0.14.1"
-schemars = "0.8.4"
+schemars = "0.8"
 serde = "1.0.219"
 sha2 = "0.10.9"
 thiserror = "1.0.64"
@@ -45,7 +45,7 @@ log = "0.4.20"
 hex = "0.4.3"
 tiny-keccak = { version = "2.0.2", features = ["keccak"] }
  
-cw20-ics20  = {  git = "https://github.com/permissionlessweb/cw-plus", features = ["library"] }
+cw20-ics20  = { path = "../cw-plus/contracts/cw20-ics20" }
 
 [dev-dependencies]
 hex = "0.4.3"
