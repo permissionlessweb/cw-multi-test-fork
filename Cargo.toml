@@ -28,12 +28,12 @@ cosmwasm_2_2 = ["cosmwasm_2_1", "cosmwasm-std/cosmwasm_2_2"]
 cosmwasm_3_0 = ["cosmwasm_2_2", "cosmwasm-std/cosmwasm_3_0"]
 
 [dependencies]
-cosmos_sdk_proto  =  { package = "cosmos-sdk-proto", path = "../cosmos-rust/cosmos-sdk-proto" }
+cosmos_sdk_proto = { package = "cosmos-sdk-proto", git = "https://github.com/permissionlessweb/cosmos-rust", branch = "main" }
 bech32 = "0.11.0"
-cosmwasm-schema = "3.0.4"
-cosmwasm-std = "3.0.4"
-cw-storage-plus = "3.0.1"
-cw-utils = { path = "../cw-minus/packages/cw-utils" }
+cosmwasm-schema = { git = "https://github.com/permissionlessweb/cosmwasm", branch = "mvp" }
+cosmwasm-std = { git = "https://github.com/permissionlessweb/cosmwasm", branch = "mvp" }
+cw-storage-plus = { git = "https://github.com/permissionlessweb/cw-storage-plus", branch = "mvp" }
+cw-utils = { git = "https://github.com/permissionlessweb/cw-minus", branch = "main" }
 derivative = "2.2.0"
 itertools = "0.13.0"
 prost = "0.14.1"
@@ -49,16 +49,16 @@ tokio   = { version = "1.39.0" }
 tonic   = { version = "0.14.1" }
 
 ## Emulation
-cosmwasm-vm = { version = "3.0", features = [
+cosmwasm-vm = { git = "https://github.com/permissionlessweb/cosmwasm", branch = "mvp", features = ["staking", "stargate", "iterator"] }
     "staking",
     "stargate",
     "iterator",
 ] }
 
 ## Dual Storage
-cosmrs =  { path = "../cosmos-rust/cosmrs" }
-cw20-ics20 = { path = "../cw-plus/contracts/cw20-ics20" }
-cw-orch = { path = "../cw-orchestrator/cw-orch", features = ["daemon"] }
+cosmrs = { git = "https://github.com/permissionlessweb/cosmos-rust", branch = "main" }
+cw20-ics20 = { git = "https://github.com/permissionlessweb/cw-plus", branch = "main" }
+cw-orch = { git = "https://github.com/permissionlessweb/cw-orchestrator", branch = "main", features = ["daemon"] }
 num-bigint = "0.4.3"
 
 # Analyzer
@@ -83,5 +83,5 @@ env_logger = "0.10.0"
  
 # Cavern Test App
 moneymarket = { git = "https://github.com/CavernPerson/money-market-contracts" }
-cw20  =  { path = "../cw-plus/packages/cw20" }
-cw2 =  { path = "../cw-minus/packages/cw2" }
+cw20 = { git = "https://github.com/permissionlessweb/cw-plus", branch = "main" }
+cw2 = { git = "https://github.com/permissionlessweb/cw-minus", branch = "main" }
