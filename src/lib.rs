@@ -197,7 +197,7 @@ pub use crate::checksums::ChecksumGenerator;
 pub use crate::contracts::{Contract, ContractWrapper};
 pub use crate::executor::{AppResponse, Executor};
 pub use crate::gov::{Gov, GovAcceptingModule, GovFailingModule};
-pub use crate::ibc::{Ibc, IbcAcceptingModule, IbcFailingModule};
+pub use crate::ibc::{Ibc, IbcAcceptingModule, IbcFailingModule, IbcSimpleModule};
 pub use crate::module::{AcceptingModule, FailingModule, Module};
 #[cfg(feature = "staking")]
 pub use crate::featured::staking::{
