@@ -28,7 +28,7 @@ cosmwasm_2_2 = ["cosmwasm_2_1", "cosmwasm-std/cosmwasm_2_2"]
 cosmwasm_3_0 = ["cosmwasm_2_2", "cosmwasm-std/cosmwasm_3_0"]
 
 [dependencies]
-cosmos_sdk_proto  =  { package = "cosmos-sdk-proto", version =  "0.28.0", git = "https://github.com/permissionlessweb/cosmos-rust" }
+cosmos_sdk_proto  =  { package = "cosmos-sdk-proto", path = "../cosmos-rust/cosmos-sdk-proto" }
 bech32 = "0.11.0"
 cosmwasm-schema = "3.0.0"
 cosmwasm-std = "3.0.1"
@@ -58,7 +58,7 @@ cosmwasm-vm = { version = "=3.0.0", features = [
 ## Dual Storage
 cosmrs =  { path = "../cosmos-rust/cosmrs" }
 cw20-ics20 = { path = "../cw-plus/contracts/cw20-ics20" }
-cw-orch = { version = "0.30.0", features = ["daemon"], git = "https://github.com/permissionlessweb/cw-orchestrator" }
+cw-orch = { path = "../cw-orchestrator/cw-orch", features = ["daemon"] }
 num-bigint = "0.4.3"
 
 # Analyzer
