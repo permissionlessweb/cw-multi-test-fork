@@ -50,10 +50,6 @@ tonic   = { version = "0.14.1" }
 
 ## Emulation
 cosmwasm-vm = { git = "https://github.com/permissionlessweb/cosmwasm", branch = "mvp", features = ["staking", "stargate", "iterator"] }
-    "staking",
-    "stargate",
-    "iterator",
-] }
 
 ## Dual Storage
 cosmrs = { git = "https://github.com/permissionlessweb/cosmos-rust", branch = "main" }
