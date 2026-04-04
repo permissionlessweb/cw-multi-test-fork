@@ -58,7 +58,7 @@ cosmwasm-vm = { git = "https://github.com/permissionlessweb/cosmwasm", branch = 
 ## Dual Storage
 cosmrs = { git = "https://github.com/permissionlessweb/cosmos-rust", branch = "main" }
 cw20-ics20 = { git = "https://github.com/permissionlessweb/cw-plus", branch = "main" }
-cw-orch = { git = "https://github.com/permissionlessweb/cw-orchestrator", branch = "main", features = ["daemon"] }
+cw-orch = { git = "https://github.com/permissionlessweb/cw-orchestrator", branch = "cw3", features = ["daemon"] }
 num-bigint = "0.4.3"
 
 # Analyzer
