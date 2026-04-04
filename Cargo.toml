@@ -30,9 +30,9 @@ cosmwasm_3_0 = ["cosmwasm_2_2", "cosmwasm-std/cosmwasm_3_0"]
 [dependencies]
 cosmos_sdk_proto  =  { package = "cosmos-sdk-proto", path = "../cosmos-rust/cosmos-sdk-proto" }
 bech32 = "0.11.0"
-cosmwasm-schema = "3.0.0"
-cosmwasm-std = "3.0.1"
-cw-storage-plus = "3.0.0"
+cosmwasm-schema = "3.0.4"
+cosmwasm-std = "3.0.4"
+cw-storage-plus = "3.0.1"
 cw-utils = { path = "../cw-minus/packages/cw-utils" }
 derivative = "2.2.0"
 itertools = "0.13.0"
@@ -49,7 +49,7 @@ tokio   = { version = "1.39.0" }
 tonic   = { version = "0.14.1" }
 
 ## Emulation
-cosmwasm-vm = { version = "=3.0.0", features = [
+cosmwasm-vm = { version = "3.0", features = [
     "staking",
     "stargate",
     "iterator",

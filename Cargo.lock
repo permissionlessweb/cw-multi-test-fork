@@ -5,14 +5,13 @@ version = 4
 [[package]]
 name = "abstract-cw-multi-test"
 version = "3.0.0-rc"
-source = "git+https://github.com/permissionlessweb/cw-multi-test-fork?branch=bump%2Fcw3%2Fofficial-ibc-fork#52cdb22e24c7b10b91fded32eb7b2f026159307b"
 dependencies = [
  "bech32 0.11.1",
  "cosmwasm-schema 3.0.4",
  "cosmwasm-std 3.0.4",
  "cw-storage-plus 3.0.1",
- "cw-utils 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cw20-ics20 3.0.0 (git+https://github.com/permissionlessweb/cw-plus)",
+ "cw-utils 3.0.0",
+ "cw20-ics20",
  "hex",
  "itertools 0.14.0",
  "log",
@@ -689,8 +688,8 @@ version = "3.0.1"
 dependencies = [
  "bech32 0.11.1",
  "cargo_metadata",
- "cosmos-sdk-proto 0.28.0 (git+https://github.com/permissionlessweb/cosmos-rust)",
- "cosmrs 0.23.0",
+ "cosmos-sdk-proto",
+ "cosmrs",
  "cosmwasm-schema 3.0.4",
  "cosmwasm-std 3.0.4",
  "cosmwasm-vm",
@@ -699,7 +698,7 @@ dependencies = [
  "cw-utils 3.0.0",
  "cw2 3.0.0",
  "cw20 3.0.0",
- "cw20-ics20 3.0.0",
+ "cw20-ics20",
  "derivative",
  "env_logger",
  "file-lock",
@@ -803,20 +802,7 @@ dependencies = [
  "bytes",
  "http-body-util",
  "prost",
- "tendermint-proto 0.40.4",
- "tonic",
- "tonic-prost",
-]
-
-[[package]]
-name = "cosmos-sdk-proto"
-version = "0.28.0"
-source = "git+https://github.com/permissionlessweb/cosmos-rust#618b985642da797975e4e2b28f05ed6cad227494"
-dependencies = [
- "bytes",
- "http-body-util",
- "prost",
- "tendermint-proto 0.40.4 (git+https://github.com/permissionlessweb/tendermint-rs)",
+ "tendermint-proto",
  "tonic",
  "tonic-prost",
 ]
@@ -826,7 +812,7 @@ name = "cosmrs"
 version = "0.23.0"
 dependencies = [
  "bip32",
- "cosmos-sdk-proto 0.28.0",
+ "cosmos-sdk-proto",
  "ecdsa",
  "eyre",
  "k256",
@@ -835,26 +821,7 @@ dependencies = [
  "serde_json",
  "signature",
  "subtle-encoding",
- "tendermint 0.40.4",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "cosmrs"
-version = "0.23.0"
-source = "git+https://github.com/permissionlessweb/cosmos-rust#618b985642da797975e4e2b28f05ed6cad227494"
-dependencies = [
- "bip32",
- "cosmos-sdk-proto 0.28.0 (git+https://github.com/permissionlessweb/cosmos-rust)",
- "ecdsa",
- "eyre",
- "k256",
- "rand_core 0.6.4",
- "serde",
- "serde_json",
- "signature",
- "subtle-encoding",
- "tendermint 0.40.4 (git+https://github.com/permissionlessweb/tendermint-rs)",
+ "tendermint",
  "tendermint-rpc",
  "thiserror 1.0.69",
  "tokio",
@@ -1307,27 +1274,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw-controllers"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b8b9a060524f8c5bff8c736e890fb52a16533e7107c6c41e1cae6077c177516"
-dependencies = [
- "cosmwasm-schema 3.0.4",
- "cosmwasm-std 3.0.4",
- "cw-storage-plus 3.0.1",
- "cw-utils 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "schemars 0.8.22",
- "serde",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "cw-orch"
 version = "0.30.0"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "anyhow",
- "cosmrs 0.23.0 (git+https://github.com/permissionlessweb/cosmos-rust)",
+ "cosmrs",
  "cosmwasm-std 3.0.4",
  "cw-orch-contract-derive",
  "cw-orch-core",
@@ -1336,7 +1287,7 @@ dependencies = [
  "cw-orch-mock",
  "cw-orch-networks",
  "cw-orch-traits",
- "cw-utils 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw-utils 3.0.0",
  "hex",
  "log",
  "schemars 0.8.22",
@@ -1348,7 +1299,6 @@ dependencies = [
 [[package]]
 name = "cw-orch-contract-derive"
 version = "0.21.1"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "convert_case",
  "quote",
@@ -1358,14 +1308,13 @@ dependencies = [
 [[package]]
 name = "cw-orch-core"
 version = "2.1.4"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "abstract-cw-multi-test",
  "anyhow",
- "cosmos-sdk-proto 0.28.0 (git+https://github.com/permissionlessweb/cosmos-rust)",
+ "cosmos-sdk-proto",
  "cosmwasm-std 3.0.4",
  "cw-storage-plus 3.0.1",
- "cw-utils 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw-utils 3.0.0",
  "dirs",
  "log",
  "serde",
@@ -1377,7 +1326,6 @@ dependencies = [
 [[package]]
 name = "cw-orch-daemon"
 version = "0.29.0"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1387,7 +1335,7 @@ dependencies = [
  "bip39",
  "bitcoin",
  "chrono",
- "cosmrs 0.23.0 (git+https://github.com/permissionlessweb/cosmos-rust)",
+ "cosmrs",
  "cosmwasm-std 3.0.4",
  "cw-orch-core",
  "cw-orch-networks",
@@ -1424,7 +1372,6 @@ dependencies = [
 [[package]]
 name = "cw-orch-fns-derive"
 version = "0.23.1"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -1435,13 +1382,12 @@ dependencies = [
 [[package]]
 name = "cw-orch-mock"
 version = "0.24.4"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "abstract-cw-multi-test",
- "cosmos-sdk-proto 0.28.0 (git+https://github.com/permissionlessweb/cosmos-rust)",
+ "cosmos-sdk-proto",
  "cosmwasm-std 3.0.4",
  "cw-orch-core",
- "cw-utils 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw-utils 3.0.0",
  "log",
  "serde",
  "sha2 0.10.9",
@@ -1450,7 +1396,6 @@ dependencies = [
 [[package]]
 name = "cw-orch-networks"
 version = "0.24.10"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "cw-orch-core",
  "serde",
@@ -1459,7 +1404,6 @@ dependencies = [
 [[package]]
 name = "cw-orch-traits"
 version = "0.25.0"
-source = "git+https://github.com/permissionlessweb/cw-orchestrator#ff94f0474bda8a420cfd61c67199b2eacc768f9f"
 dependencies = [
  "cw-orch-core",
  "prost-types",
@@ -1543,19 +1487,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw-utils"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8667e96f2c65cf7f4c6c66bfd6ee46909c40827bc1caea0409234e34f03cf061"
-dependencies = [
- "cosmwasm-schema 3.0.4",
- "cosmwasm-std 3.0.4",
- "schemars 0.8.22",
- "serde",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "cw2"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1571,21 +1502,6 @@ dependencies = [
 [[package]]
 name = "cw2"
 version = "3.0.0"
-dependencies = [
- "cosmwasm-schema 3.0.4",
- "cosmwasm-std 3.0.4",
- "cw-storage-plus 3.0.1",
- "schemars 0.8.22",
- "semver",
- "serde",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "cw2"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50582114ab739724c25a27cea1785351f2b5fea7968214302e0023ee2c0e8b39"
 dependencies = [
  "cosmwasm-schema 3.0.4",
  "cosmwasm-std 3.0.4",
@@ -1621,46 +1537,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw20"
-version = "3.0.0"
-source = "git+https://github.com/permissionlessweb/cw-plus#c74717433db9fcd86ac408c1b7fbc0c35caefaa3"
-dependencies = [
- "cosmwasm-schema 3.0.4",
- "cosmwasm-std 3.0.4",
- "cw-utils 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "schemars 0.8.22",
- "serde",
-]
-
-[[package]]
 name = "cw20-ics20"
 version = "3.0.0"
 dependencies = [
  "cosmwasm-schema 3.0.4",
  "cosmwasm-std 3.0.4",
- "cw-controllers 3.0.0",
+ "cw-controllers",
  "cw-storage-plus 3.0.1",
  "cw-utils 3.0.0",
  "cw2 3.0.0",
  "cw20 3.0.0",
- "schemars 0.8.22",
- "semver",
- "serde",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "cw20-ics20"
-version = "3.0.0"
-source = "git+https://github.com/permissionlessweb/cw-plus#c74717433db9fcd86ac408c1b7fbc0c35caefaa3"
-dependencies = [
- "cosmwasm-schema 3.0.4",
- "cosmwasm-std 3.0.4",
- "cw-controllers 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cw-storage-plus 3.0.1",
- "cw-utils 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cw2 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cw20 3.0.0 (git+https://github.com/permissionlessweb/cw-plus)",
  "schemars 0.8.22",
  "semver",
  "serde",
@@ -2217,7 +2103,6 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c606d892c9de11507fa0dcffc116434f94e105d0bbdc4e405b61519464c49d7b"
 dependencies = [
- "eyre",
  "paste",
 ]
 
@@ -2772,32 +2657,29 @@ dependencies = [
 [[package]]
 name = "ibc-proto"
 version = "0.52.0"
-source = "git+https://github.com/permissionlessweb/ibc-proto-rs#2386929c0f008c12b30bd086617333d3717e1c33"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "cosmos-sdk-proto 0.28.0 (git+https://github.com/permissionlessweb/cosmos-rust)",
+ "cosmos-sdk-proto",
  "flex-error",
  "ics23",
- "informalsystems-pbjson 0.7.0 (git+https://github.com/permissionlessweb/pbjson)",
+ "informalsystems-pbjson",
  "prost",
  "subtle-encoding",
- "tendermint-proto 0.40.4 (git+https://github.com/permissionlessweb/tendermint-rs)",
+ "tendermint-proto",
  "tonic",
  "tonic-prost",
 ]
 
 [[package]]
 name = "ics23"
-version = "0.12.1"
-source = "git+https://github.com/permissionlessweb/ics23?branch=prost-14.1#dc6ba0a181b1a88f2e95e157d5c2f5c275489be1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "bytes",
  "hex",
- "informalsystems-pbjson 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "informalsystems-pbjson",
  "prost",
- "prost-derive",
  "serde",
 ]
 
@@ -2938,15 +2820,6 @@ name = "informalsystems-pbjson"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9aa4a0980c8379295100d70854354e78df2ee1c6ca0f96ffe89afeb3140e3a3d"
-dependencies = [
- "base64 0.21.7",
- "serde",
-]
-
-[[package]]
-name = "informalsystems-pbjson"
-version = "0.7.0"
-source = "git+https://github.com/permissionlessweb/pbjson#df9ae64ffc106affccdfec2437365f8498ef306d"
 dependencies = [
  "base64 0.21.7",
  "serde",
@@ -4902,36 +4775,7 @@ dependencies = [
  "signature",
  "subtle",
  "subtle-encoding",
- "tendermint-proto 0.40.4",
- "time",
- "zeroize",
-]
-
-[[package]]
-name = "tendermint"
-version = "0.40.4"
-source = "git+https://github.com/permissionlessweb/tendermint-rs#1810ef5baa73105f560b87046d833e8025f30cf4"
-dependencies = [
- "bytes",
- "digest 0.10.7",
- "ed25519",
- "ed25519-consensus",
- "flex-error",
- "futures",
- "k256",
- "num-traits",
- "once_cell",
- "prost",
- "ripemd",
- "serde",
- "serde_bytes",
- "serde_json",
- "serde_repr",
- "sha2 0.10.9",
- "signature",
- "subtle",
- "subtle-encoding",
- "tendermint-proto 0.40.4 (git+https://github.com/permissionlessweb/tendermint-rs)",
+ "tendermint-proto",
  "time",
  "zeroize",
 ]
@@ -4939,12 +4783,11 @@ dependencies = [
 [[package]]
 name = "tendermint-config"
 version = "0.40.4"
-source = "git+https://github.com/permissionlessweb/tendermint-rs#1810ef5baa73105f560b87046d833e8025f30cf4"
 dependencies = [
  "flex-error",
  "serde",
  "serde_json",
- "tendermint 0.40.4 (git+https://github.com/permissionlessweb/tendermint-rs)",
+ "tendermint",
  "toml",
  "url",
 ]
@@ -4963,23 +4806,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "tendermint-proto"
-version = "0.40.4"
-source = "git+https://github.com/permissionlessweb/tendermint-rs#1810ef5baa73105f560b87046d833e8025f30cf4"
-dependencies = [
- "bytes",
- "flex-error",
- "prost",
- "serde",
- "serde_bytes",
- "subtle-encoding",
- "time",
-]
-
-[[package]]
 name = "tendermint-rpc"
 version = "0.40.4"
-source = "git+https://github.com/permissionlessweb/tendermint-rs#1810ef5baa73105f560b87046d833e8025f30cf4"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4996,9 +4824,9 @@ dependencies = [
  "serde_json",
  "subtle",
  "subtle-encoding",
- "tendermint 0.40.4 (git+https://github.com/permissionlessweb/tendermint-rs)",
+ "tendermint",
  "tendermint-config",
- "tendermint-proto 0.40.4 (git+https://github.com/permissionlessweb/tendermint-rs)",
+ "tendermint-proto",
  "thiserror 1.0.69",
  "time",
  "tokio",
