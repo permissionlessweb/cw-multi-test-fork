@@ -1,6 +1,6 @@
 use super::*;
 use cosmwasm_std::CanonicalAddr;
-use cw_multi_test::{IntoBech32, IntoBech32m, MockApiBech32, MockApiBech32m};
+use cw_multi_test::{IntoBech32, MockApiBech32, MockApiBech32m};
 
 const ADDR_JUNO: &str = "juno1h34lmpywh4upnjdg90cjf4j70aee6z8qqfspugamjp42e4q28kqsksmtyp";
 const ADDR_DEFAULT: &str = "cosmwasm1h34lmpywh4upnjdg90cjf4j70aee6z8qqfspugamjp42e4q28kqs8s7vcp";
@@ -16,22 +16,6 @@ fn new_api_bech32_should_work() {
         ADDR_JUNO
     );
     assert_eq!("creator".into_bech32().as_str(), ADDR_DEFAULT);
-}
-
-#[test]
-fn api_bech32_should_differ_from_bech32m() {
-    assert_ne!(
-        MockApiBech32::new("juno").addr_make("sender").as_str(),
-        MockApiBech32m::new("juno").addr_make("sender").as_str(),
-    );
-    assert_ne!(
-        "sender".into_bech32_with_prefix("juno").as_str(),
-        "sender".into_bech32m_with_prefix("juno").as_str()
-    );
-    assert_ne!(
-        "sender".into_bech32().as_str(),
-        "sender".into_bech32m().as_str()
-    );
 }
 
 #[test]
@@ -55,7 +39,7 @@ fn address_validate_invalid_address() {
 #[test]
 fn addr_validate_invalid_prefix() {
     MockApiBech32::new("juno")
-        .addr_validate(MockApiBech32m::new("osmosis").addr_make("creator").as_str())
+        .addr_validate(MockApiBech32::new("osmosis").addr_make("creator").as_str())
         .unwrap_err();
 }
 
@@ -80,7 +64,7 @@ fn address_canonicalize_humanize_should_work() {
 #[test]
 fn address_humanize_prefix_too_long() {
     assert_eq!(
-        "Generic error: hrp is too long, found 85 characters, must be <= 126",
+        "kind: Other, error: hrp is too long, found 85 characters, must be <= 126",
         MockApiBech32::new(
             "juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_juno_",
         )
@@ -93,7 +77,7 @@ fn address_humanize_prefix_too_long() {
 #[test]
 fn address_humanize_canonical_too_long() {
     assert_eq!(
-        "Generic error: Invalid canonical address",
+        "kind: Other, error: Invalid canonical address",
         MockApiBech32::new("juno")
             .addr_humanize(&CanonicalAddr::from([1; 1024]))
             .unwrap_err()

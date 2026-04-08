@@ -1,5 +1,4 @@
-use anyhow::Result as AnyResult;
-use cosmwasm_std::{from_json, Api, Binary, CustomMsg, CustomQuery, IbcPacket, Storage};
+use cosmwasm_std::{from_json, Api, Binary, CustomMsg, CustomQuery, IbcPacket, StdResult, Storage};
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -59,7 +58,7 @@ pub fn relay_packets_in_tx<
     app1: &mut App<BankT1, ApiT1, StorageT1, CustomT1, WasmT1, StakingT1, DistrT1, IbcT1, GovT1>,
     app2: &mut App<BankT2, ApiT2, StorageT2, CustomT2, WasmT2, StakingT2, DistrT2, IbcT2, GovT2>,
     app1_tx_response: AppResponse,
-) -> AnyResult<Vec<RelayPacketResult>>
+) -> StdResult<Vec<RelayPacketResult>>
 where
     CustomT1::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT1::QueryT: CustomQuery + DeserializeOwned + 'static,
@@ -136,7 +135,7 @@ pub fn relay_packet<
     src_port_id: String,
     src_channel_id: String,
     sequence: u64,
-) -> AnyResult<RelayPacketResult>
+) -> StdResult<RelayPacketResult>
 where
     CustomT1::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT1::QueryT: CustomQuery + DeserializeOwned + 'static,

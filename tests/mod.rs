@@ -86,7 +86,7 @@ mod test_contracts {
             ensure_eq!(
                 decoded_payload,
                 REPLY_WITH_PAYLOAD_PAYLOAD,
-                StdError::generic_err("Payload doesn't match")
+                StdError::msg("Payload doesn't match")
             );
 
             Ok(Response::new())

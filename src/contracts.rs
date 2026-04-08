@@ -1,14 +1,16 @@
 //! # Implementation of the contract trait and contract wrapper
 
-use crate::error::{anyhow, bail, AnyError, AnyResult};
+use crate::error::{std_error, std_error_bail};
+#[cfg(feature = "cosmwasm_2_2")]
+use cosmwasm_std::MigrateInfo;
 use cosmwasm_std::{
     from_json, Binary, Checksum, CosmosMsg, CustomMsg, CustomQuery, Deps, DepsMut, Empty, Env,
-    IbcSourceCallbackMsg, MessageInfo, QuerierWrapper, Reply, Response, SubMsg,
+    IbcSourceCallbackMsg, MessageInfo, QuerierWrapper, Reply, Response, StdResult, SubMsg,
 };
 use cosmwasm_std::{
     IbcBasicResponse, IbcChannelCloseMsg, IbcChannelConnectMsg, IbcChannelOpenMsg,
     IbcChannelOpenResponse, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg,
-    IbcReceiveResponse,
+    IbcReceiveResponse, StdError,
 };
 use ibc::{IbcClosure, IbcFn};
 use serde::de::DeserializeOwned;
@@ -23,22 +25,27 @@ where
     Q: CustomQuery,
 {
     /// Evaluates contract's `execute` entry-point.
-    fn execute(&self, deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: Vec<u8>) -> AnyResult<Response<C>>;
+    fn execute(&self, deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: Vec<u8>) -> StdResult<Response<C>>;
 
     /// Evaluates contract's `instantiate` entry-point.
-    fn instantiate(&self, deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: Vec<u8>) -> AnyResult<Response<C>>;
+    fn instantiate(&self, deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: Vec<u8>) -> StdResult<Response<C>>;
 
     /// Evaluates contract's `query` entry-point.
-    fn query(&self, deps: Deps<Q>, env: Env, msg: Vec<u8>) -> AnyResult<Binary>;
+    fn query(&self, deps: Deps<Q>, env: Env, msg: Vec<u8>) -> StdResult<Binary>;
 
     /// Evaluates contract's `sudo` entry-point.
-    fn sudo(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> AnyResult<Response<C>>;
+    fn sudo(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> StdResult<Response<C>>;
 
     /// Evaluates contract's `reply` entry-point.
-    fn reply(&self, deps: DepsMut<Q>, env: Env, msg: Reply) -> AnyResult<Response<C>>;
+    fn reply(&self, deps: DepsMut<Q>, env: Env, msg: Reply) -> StdResult<Response<C>>;
 
     /// Evaluates contract's `migrate` entry-point.
-    fn migrate(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> AnyResult<Response<C>>;
+    #[cfg(not(feature = "cosmwasm_2_2"))]
+    fn migrate(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> StdResult<Response<C>>;
+
+    /// Evaluates contract's `migrate` entry-point.
+    #[cfg(feature = "cosmwasm_2_2")]
+    fn migrate(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>, info: MigrateInfo) -> StdResult<Response<C>>;
 
     /// Returns the provided checksum of the contract's Wasm blob.
     fn checksum(&self) -> Option<Checksum> {
@@ -52,8 +59,8 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcChannelOpenMsg,
-    ) -> AnyResult<IbcChannelOpenResponse> {
-        bail!("No Ibc capabilities on this contract")
+    ) -> StdResult<IbcChannelOpenResponse> {
+        std_error_bail!("No Ibc capabilities on this contract")
     }
 
     /// Executes the contract ibc_channel_connect endpoint
@@ -63,8 +70,8 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcChannelConnectMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
-        bail!("No Ibc capabilities on this contract")
+    ) -> StdResult<IbcBasicResponse<C>> {
+        std_error_bail!("No Ibc capabilities on this contract")
     }
 
     /// Executes the contract ibc_channel_close endpoint
@@ -74,8 +81,8 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcChannelCloseMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
-        bail!("No Ibc capabilities on this contract")
+    ) -> StdResult<IbcBasicResponse<C>> {
+        std_error_bail!("No Ibc capabilities on this contract")
     }
 
     /// Executes the contract ibc_packet_receive endpoint
@@ -85,8 +92,8 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcPacketReceiveMsg,
-    ) -> AnyResult<IbcReceiveResponse<C>> {
-        bail!("No Ibc capabilities on this contract")
+    ) -> StdResult<IbcReceiveResponse<C>> {
+        std_error_bail!("No Ibc capabilities on this contract")
     }
 
     /// Executes the contract ibc_packet_acknowledge endpoint
@@ -96,8 +103,8 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcPacketAckMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
-        bail!("No Ibc capabilities on this contract")
+    ) -> StdResult<IbcBasicResponse<C>> {
+        std_error_bail!("No Ibc capabilities on this contract")
     }
 
     /// Executes the contract ibc_packet_timeout endpoint
@@ -107,8 +114,8 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcPacketTimeoutMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
-        bail!("No Ibc capabilities on this contract")
+    ) -> StdResult<IbcBasicResponse<C>> {
+        std_error_bail!("No Ibc capabilities on this contract")
     }
     
     /// Executes the contract ibc_source_callback endpoint
@@ -118,8 +125,8 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcSourceCallbackMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
-        bail!("No Ibc source callback on this contract")
+    ) -> StdResult<IbcBasicResponse<C>> {
+        std_error_bail!("No Ibc source callback on this contract")
     }
 
 
@@ -130,16 +137,26 @@ mod closures {
     use super::*;
 
     // function types
-    pub type ContractFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: T) -> Result<Response<C>, E>;
-    pub type PermissionedFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: T) -> Result<Response<C>, E>;
-    pub type ReplyFn<C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: Reply) -> Result<Response<C>, E>;
+    pub type InstantiateFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: T) -> Result<Response<C>, E>;
+    pub type ExecuteFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: T) -> Result<Response<C>, E>;
     pub type QueryFn<T, E, Q> = fn(deps: Deps<Q>, env: Env, msg: T) -> Result<Binary, E>;
+    pub type ReplyFn<C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: Reply) -> Result<Response<C>, E>;
+    pub type SudoFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: T) -> Result<Response<C>, E>;
+    #[cfg(not(feature = "cosmwasm_2_2"))]
+    pub type MigrateFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: T) -> Result<Response<C>, E>;
+    #[cfg(feature = "cosmwasm_2_2")]
+    pub type MigrateFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: T, info: MigrateInfo) -> Result<Response<C>, E>;
 
     // closure types
-    pub type ContractClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, MessageInfo, T) -> Result<Response<C>, E>>;
-    pub type PermissionedClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, T) -> Result<Response<C>, E>>;
-    pub type ReplyClosure<C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, Reply) -> Result<Response<C>, E>>;
+    pub type InstantiateClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, MessageInfo, T) -> Result<Response<C>, E>>;
+    pub type ExecuteClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, MessageInfo, T) -> Result<Response<C>, E>>;
     pub type QueryClosure<T, E, Q> = Box<dyn Fn(Deps<Q>, Env, T) -> Result<Binary, E>>;
+    pub type ReplyClosure<C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, Reply) -> Result<Response<C>, E>>;
+    pub type SudoClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, T) -> Result<Response<C>, E>>;
+    #[cfg(not(feature = "cosmwasm_2_2"))]
+    pub type MigrateClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, T) -> Result<Response<C>, E>>;
+    #[cfg(feature = "cosmwasm_2_2")]
+    pub type MigrateClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, T, MigrateInfo) -> Result<Response<C>, E>>;
 
     pub mod ibc{
         use super::*;
@@ -240,17 +257,17 @@ pub struct ContractWrapper<
     C = Empty,
     Q = Empty,
     T4 = Empty,
-    E4 = AnyError,
-    E5 = AnyError,
+    E4 = StdError,
+    E5 = StdError,
     T6 = Empty,
-    E6 = AnyError,
-    E7 = AnyError,
-    E8 = AnyError,
-    E9 = AnyError,
-    E10 = AnyError,
-    E11 = AnyError,
-    E12 = AnyError,
-    E13 = AnyError,
+    E6 = StdError,
+    E7 = StdError,
+    E8 = StdError,
+    E9 = StdError,
+    E10 = StdError,
+    E11 = StdError,
+    E12 = StdError,
+    E13 = StdError,
 > where
     T1: DeserializeOwned, // Type of message passed to `execute` entry-point.
     T2: DeserializeOwned, // Type of message passed to `instantiate` entry-point.
@@ -273,12 +290,12 @@ pub struct ContractWrapper<
     C: CustomMsg, // Type of custom message returned from all entry-points except `query`.
     Q: CustomQuery + DeserializeOwned, // Type of custom query in querier passed as deps/deps_mut to all entry-points.
 {
-    execute_fn: ContractClosure<T1, C, E1, Q>,
-    instantiate_fn: ContractClosure<T2, C, E2, Q>,
+    execute_fn: ExecuteClosure<T1, C, E1, Q>,
+    instantiate_fn: InstantiateClosure<T2, C, E2, Q>,
     query_fn: QueryClosure<T3, E3, Q>,
-    sudo_fn: Option<PermissionedClosure<T4, C, E4, Q>>,
+    sudo_fn: Option<SudoClosure<T4, C, E4, Q>>,
     reply_fn: Option<ReplyClosure<C, E5, Q>>,
-    migrate_fn: Option<PermissionedClosure<T6, C, E6, Q>>,
+    migrate_fn: Option<MigrateClosure<T6, C, E6, Q>>,
     checksum: Option<Checksum>,
 
     channel_open_fn: Option<IbcClosure<IbcChannelOpenMsg, IbcChannelOpenResponse, E7, Q>>,
@@ -305,8 +322,8 @@ where
 {
     /// Creates a new contract wrapper with default settings.
     pub fn new(
-        execute_fn: ContractFn<T1, C, E1, Q>,
-        instantiate_fn: ContractFn<T2, C, E2, Q>,
+        execute_fn: ExecuteFn<T1, C, E1, Q>,
+        instantiate_fn: InstantiateFn<T2, C, E2, Q>,
         query_fn: QueryFn<T3, E3, Q>,
     ) -> Self {
         Self {
@@ -333,13 +350,13 @@ where
     /// This will take a contract that returns `Response<Empty>` and will _upgrade_ it
     /// to `Response<C>` if needed, to be compatible with a chain-specific extension.
     pub fn new_with_empty(
-        execute_fn: ContractFn<T1, Empty, E1, Empty>,
-        instantiate_fn: ContractFn<T2, Empty, E2, Empty>,
+        execute_fn: ExecuteFn<T1, Empty, E1, Empty>,
+        instantiate_fn: InstantiateFn<T2, Empty, E2, Empty>,
         query_fn: QueryFn<T3, E3, Empty>,
     ) -> Self {
         Self {
-            execute_fn: customize_contract_fn(execute_fn),
-            instantiate_fn: customize_contract_fn(instantiate_fn),
+            execute_fn: customize_execute_fn(execute_fn),
+            instantiate_fn: customize_instantiate_fn(instantiate_fn),
             query_fn: customize_query_fn(query_fn),
             sudo_fn: None,
             reply_fn: None,
@@ -408,7 +425,7 @@ where
     /// Populates [ContractWrapper] with contract's `sudo` entry-point and custom message type.
     pub fn with_sudo<T4A, E4A>(
         self,
-        sudo_fn: PermissionedFn<T4A, C, E4A, Q>,
+        sudo_fn: SudoFn<T4A, C, E4A, Q>,
     ) -> ContractWrapper<
         T1,
         T2,
@@ -459,7 +476,7 @@ where
     /// Populates [ContractWrapper] with contract's `sudo` entry-point and `Empty` as a custom message.
     pub fn with_sudo_empty<T4A, E4A>(
         self,
-        sudo_fn: PermissionedFn<T4A, Empty, E4A, Empty>,
+        sudo_fn: SudoFn<T4A, Empty, E4A, Empty>,
     ) -> ContractWrapper<
         T1,
         T2,
@@ -490,7 +507,7 @@ where
             execute_fn: self.execute_fn,
             instantiate_fn: self.instantiate_fn,
             query_fn: self.query_fn,
-            sudo_fn: Some(customize_permissioned_fn(sudo_fn)),
+            sudo_fn: Some(customize_sudo_fn(sudo_fn)),
             reply_fn: self.reply_fn,
             migrate_fn: self.migrate_fn,
             checksum: None,
@@ -591,7 +608,7 @@ where
             instantiate_fn: self.instantiate_fn,
             query_fn: self.query_fn,
             sudo_fn: self.sudo_fn,
-            reply_fn: Some(customize_permissioned_fn(reply_fn)),
+            reply_fn: Some(customize_reply_fn(reply_fn)),
             migrate_fn: self.migrate_fn,
             checksum: None,
 
@@ -610,7 +627,7 @@ where
     /// Populates [ContractWrapper] with contract's `migrate` entry-point and custom message type.
     pub fn with_migrate<T6A, E6A>(
         self,
-        migrate_fn: PermissionedFn<T6A, C, E6A, Q>,
+        migrate_fn: MigrateFn<T6A, C, E6A, Q>,
     ) -> ContractWrapper<
         T1,
         T2,
@@ -661,7 +678,7 @@ where
     /// Populates [ContractWrapper] with contract's `migrate` entry-point and `Empty` as a custom message.
     pub fn with_migrate_empty<T6A, E6A>(
         self,
-        migrate_fn: PermissionedFn<T6A, Empty, E6A, Empty>,
+        migrate_fn: MigrateFn<T6A, Empty, E6A, Empty>,
     ) -> ContractWrapper<
         T1,
         T2,
@@ -694,7 +711,7 @@ where
             query_fn: self.query_fn,
             sudo_fn: self.sudo_fn,
             reply_fn: self.reply_fn,
-            migrate_fn: Some(customize_permissioned_fn(migrate_fn)),
+            migrate_fn: Some(customize_migrate_fn(migrate_fn)),
             checksum: None,
 
             channel_open_fn: self.channel_open_fn,
@@ -826,9 +843,30 @@ where
     }
 }
 
-fn customize_contract_fn<T, C, E, Q>(
-    raw_fn: ContractFn<T, Empty, E, Empty>,
-) -> ContractClosure<T, C, E, Q>
+fn customize_instantiate_fn<T, C, E, Q>(
+    raw_fn: InstantiateFn<T, Empty, E, Empty>,
+) -> InstantiateClosure<T, C, E, Q>
+where
+    T: DeserializeOwned + 'static,
+    E: Display + Debug + Send + Sync + 'static,
+    C: CustomMsg,
+    Q: CustomQuery + DeserializeOwned,
+{
+    Box::new(
+        move |mut deps: DepsMut<Q>,
+              env: Env,
+              info: MessageInfo,
+              msg: T|
+              -> Result<Response<C>, E> {
+            let deps = decustomize_deps_mut(&mut deps);
+            raw_fn(deps, env, info, msg).map(customize_response::<C>)
+        },
+    )
+}
+
+fn customize_execute_fn<T, C, E, Q>(
+    raw_fn: ExecuteFn<T, Empty, E, Empty>,
+) -> ExecuteClosure<T, C, E, Q>
 where
     T: DeserializeOwned + 'static,
     E: Display + Debug + Send + Sync + 'static,
@@ -861,9 +899,7 @@ where
     )
 }
 
-fn customize_permissioned_fn<T, C, E, Q>(
-    raw_fn: PermissionedFn<T, Empty, E, Empty>,
-) -> PermissionedClosure<T, C, E, Q>
+fn customize_sudo_fn<T, C, E, Q>(raw_fn: SudoFn<T, Empty, E, Empty>) -> SudoClosure<T, C, E, Q>
 where
     T: DeserializeOwned + 'static,
     E: Display + Debug + Send + Sync + 'static,
@@ -874,6 +910,43 @@ where
         move |mut deps: DepsMut<Q>, env: Env, msg: T| -> Result<Response<C>, E> {
             let deps = decustomize_deps_mut(&mut deps);
             raw_fn(deps, env, msg).map(customize_response::<C>)
+        },
+    )
+}
+
+fn customize_reply_fn<C, E, Q>(raw_fn: ReplyFn<Empty, E, Empty>) -> ReplyClosure<C, E, Q>
+where
+    E: Display + Debug + Send + Sync + 'static,
+    C: CustomMsg,
+    Q: CustomQuery + DeserializeOwned,
+{
+    Box::new(
+        move |mut deps: DepsMut<Q>, env: Env, msg: Reply| -> Result<Response<C>, E> {
+            let deps = decustomize_deps_mut(&mut deps);
+            raw_fn(deps, env, msg).map(customize_response::<C>)
+        },
+    )
+}
+
+fn customize_migrate_fn<T, C, E, Q>(
+    raw_fn: MigrateFn<T, Empty, E, Empty>,
+) -> MigrateClosure<T, C, E, Q>
+where
+    T: DeserializeOwned + 'static,
+    E: Display + Debug + Send + Sync + 'static,
+    C: CustomMsg,
+    Q: CustomQuery + DeserializeOwned,
+{
+    Box::new(
+        #[cfg(not(feature = "cosmwasm_2_2"))]
+        move |mut deps: DepsMut<Q>, env: Env, msg: T| -> Result<Response<C>, E> {
+            let deps = decustomize_deps_mut(&mut deps);
+            raw_fn(deps, env, msg).map(customize_response::<C>)
+        },
+        #[cfg(feature = "cosmwasm_2_2")]
+        move |mut deps: DepsMut<Q>, env: Env, msg: T, inf: MigrateInfo| -> Result<Response<C>, E> {
+            let deps = decustomize_deps_mut(&mut deps);
+            raw_fn(deps, env, msg, inf).map(customize_response::<C>)
         },
     )
 }
@@ -993,9 +1066,9 @@ where
         env: Env,
         info: MessageInfo,
         msg: Vec<u8>,
-    ) -> AnyResult<Response<C>> {
+    ) -> StdResult<Response<C>> {
         let msg: T1 = from_json(msg)?;
-        (self.execute_fn)(deps, env, info, msg).map_err(|err: E1| anyhow!(err))
+        (self.execute_fn)(deps, env, info, msg).map_err(|err: E1| std_error!(err))
     }
 
     /// Calls [instantiate] on wrapped [Contract] trait implementor.
@@ -1007,28 +1080,28 @@ where
         env: Env,
         info: MessageInfo,
         msg: Vec<u8>,
-    ) -> AnyResult<Response<C>> {
+    ) -> StdResult<Response<C>> {
         let msg: T2 = from_json(msg)?;
-        (self.instantiate_fn)(deps, env, info, msg).map_err(|err: E2| anyhow!(err))
+        (self.instantiate_fn)(deps, env, info, msg).map_err(|err: E2| std_error!(err))
     }
 
     /// Calls [query] on wrapped [Contract] trait implementor.
     ///
     /// [query]: Contract::query
-    fn query(&self, deps: Deps<Q>, env: Env, msg: Vec<u8>) -> AnyResult<Binary> {
+    fn query(&self, deps: Deps<Q>, env: Env, msg: Vec<u8>) -> StdResult<Binary> {
         let msg: T3 = from_json(msg)?;
-        (self.query_fn)(deps, env, msg).map_err(|err: E3| anyhow!(err))
+        (self.query_fn)(deps, env, msg).map_err(|err: E3| std_error!(err))
     }
 
     /// Calls [sudo] on wrapped [Contract] trait implementor.
     /// Returns an error when the contract does not implement [sudo].
     ///
     /// [sudo]: Contract::sudo
-    fn sudo(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> AnyResult<Response<C>> {
+    fn sudo(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> StdResult<Response<C>> {
         let msg: T4 = from_json(msg)?;
         match &self.sudo_fn {
-            Some(sudo) => sudo(deps, env, msg).map_err(|err: E4| anyhow!(err)),
-            None => bail!("sudo is not implemented for contract"),
+            Some(sudo) => sudo(deps, env, msg).map_err(|err: E4| std_error!(err)),
+            None => std_error_bail!("sudo is not implemented for contract"),
         }
     }
 
@@ -1036,11 +1109,11 @@ where
     /// Returns an error when the contract does not implement [reply].
     ///
     /// [reply]: Contract::reply
-    fn reply(&self, deps: DepsMut<Q>, env: Env, reply_data: Reply) -> AnyResult<Response<C>> {
+    fn reply(&self, deps: DepsMut<Q>, env: Env, reply_data: Reply) -> StdResult<Response<C>> {
         let msg: Reply = reply_data;
         match &self.reply_fn {
-            Some(reply) => reply(deps, env, msg).map_err(|err: E5| anyhow!(err)),
-            None => bail!("reply is not implemented for contract"),
+            Some(reply) => reply(deps, env, msg).map_err(|err: E5| std_error!(err)),
+            None => std_error_bail!("reply is not implemented for contract"),
         }
     }
 
@@ -1048,14 +1121,33 @@ where
     /// Returns an error when the contract does not implement [migrate].
     ///
     /// [migrate]: Contract::migrate
-    fn migrate(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> AnyResult<Response<C>> {
+    #[cfg(not(feature = "cosmwasm_2_2"))]
+    fn migrate(&self, deps: DepsMut<Q>, env: Env, msg: Vec<u8>) -> StdResult<Response<C>> {
         let msg: T6 = from_json(msg)?;
         match &self.migrate_fn {
-            Some(migrate) => migrate(deps, env, msg).map_err(|err: E6| anyhow!(err)),
-            None => bail!("migrate is not implemented for contract"),
+            Some(migrate) => migrate(deps, env, msg).map_err(|err: E6| std_error!(err)),
+            None => std_error_bail!("migrate is not implemented for contract"),
         }
     }
 
+    /// Calls [migrate] on wrapped [Contract] trait implementor.
+    /// Returns an error when the contract does not implement [migrate].
+    ///
+    /// [migrate]: Contract::migrate
+    #[cfg(feature = "cosmwasm_2_2")]
+    fn migrate(
+        &self,
+        deps: DepsMut<Q>,
+        env: Env,
+        msg: Vec<u8>,
+        info: MigrateInfo,
+    ) -> StdResult<Response<C>> {
+        let msg: T6 = from_json(msg)?;
+        match &self.migrate_fn {
+            Some(migrate) => migrate(deps, env, msg, info).map_err(|err: E6| std_error!(err)),
+            None => std_error_bail!("migrate is not implemented for contract"),
+        }
+    }
     /// Returns the provided checksum of the contract's Wasm blob.
     fn checksum(&self) -> Option<Checksum> {
         self.checksum
@@ -1066,10 +1158,10 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcChannelOpenMsg,
-    ) -> AnyResult<IbcChannelOpenResponse> {
+    ) -> StdResult<IbcChannelOpenResponse> {
         match &self.channel_open_fn {
-            Some(channel_open) => channel_open(deps, env, msg).map_err(|err| anyhow!(err)),
-            None => bail!("channel open not implemented for contract"),
+            Some(channel_open) => channel_open(deps, env, msg).map_err(|err| std_error!(err)),
+            None => std_error_bail!("channel open not implemented for contract"),
         }
     }
     fn ibc_channel_connect(
@@ -1077,10 +1169,10 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcChannelConnectMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
+    ) -> StdResult<IbcBasicResponse<C>> {
         match &self.channel_connect_fn {
-            Some(channel_connect) => channel_connect(deps, env, msg).map_err(|err| anyhow!(err)),
-            None => bail!("channel connect not implemented for contract"),
+            Some(channel_connect) => channel_connect(deps, env, msg).map_err(|err| std_error!(err)),
+            None => std_error_bail!("channel connect not implemented for contract"),
         }
     }
     fn ibc_channel_close(
@@ -1088,10 +1180,10 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcChannelCloseMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
+    ) -> StdResult<IbcBasicResponse<C>> {
         match &self.channel_close_fn {
-            Some(channel_close) => channel_close(deps, env, msg).map_err(|err| anyhow!(err)),
-            None => bail!("channel close not implemented for contract"),
+            Some(channel_close) => channel_close(deps, env, msg).map_err(|err| std_error!(err)),
+            None => std_error_bail!("channel close not implemented for contract"),
         }
     }
 
@@ -1100,10 +1192,10 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcPacketReceiveMsg,
-    ) -> AnyResult<IbcReceiveResponse<C>> {
+    ) -> StdResult<IbcReceiveResponse<C>> {
         match &self.ibc_packet_receive_fn {
-            Some(packet_receive) => packet_receive(deps, env, msg).map_err(|err| anyhow!(err)),
-            None => bail!("packet receive not implemented for contract"),
+            Some(packet_receive) => packet_receive(deps, env, msg).map_err(|err| std_error!(err)),
+            None => std_error_bail!("packet receive not implemented for contract"),
         }
     }
     fn ibc_packet_acknowledge(
@@ -1111,10 +1203,10 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcPacketAckMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
+    ) -> StdResult<IbcBasicResponse<C>> {
         match &self.ibc_packet_ack_fn {
-            Some(packet_ack) => packet_ack(deps, env, msg).map_err(|err| anyhow!(err)),
-            None => bail!("packet ack not implemented for contract"),
+            Some(packet_ack) => packet_ack(deps, env, msg).map_err(|err| std_error!(err)),
+            None => std_error_bail!("packet ack not implemented for contract"),
         }
     }
     fn ibc_packet_timeout(
@@ -1122,10 +1214,10 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcPacketTimeoutMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
+    ) -> StdResult<IbcBasicResponse<C>> {
         match &self.ibc_packet_timeout_fn {
-            Some(packet_timeout) => packet_timeout(deps, env, msg).map_err(|err| anyhow!(err)),
-            None => bail!("packet timeout not implemented for contract"),
+            Some(packet_timeout) => packet_timeout(deps, env, msg).map_err(|err| std_error!(err)),
+            None => std_error_bail!("packet timeout not implemented for contract"),
         }
     }
 
@@ -1134,12 +1226,12 @@ where
         deps: DepsMut<Q>,
         env: Env,
         msg: IbcSourceCallbackMsg,
-    ) -> AnyResult<IbcBasicResponse<C>> {
+    ) -> StdResult<IbcBasicResponse<C>> {
         match &self.ibc_source_callback {
             Some(ibc_source_callback) => {
-                ibc_source_callback(deps, env, msg).map_err(|err| anyhow!(err))
+                ibc_source_callback(deps, env, msg).map_err(|err| std_error!(err))
             }
-            None => bail!("ibc source callback not implemented for contract"),
+            None => std_error_bail!("ibc source callback not implemented for contract"),
         }
     }
 }

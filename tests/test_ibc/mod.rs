@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     from_json, to_json_binary, ChannelResponse, Empty, IbcChannel, IbcEndpoint, IbcOrder, IbcQuery,
-    Querier, QueryRequest,
+    Querier, QueryRequest, StdResult,
 };
 
 use cw_multi_test::{
@@ -15,7 +15,7 @@ mod bank;
 mod timeout;
 
 #[test]
-fn channel_creation() -> anyhow::Result<()> {
+fn channel_creation() -> StdResult<()> {
     // Here we want to create a channel between 2 bank modules to make sure that we are able to create a channel correctly
     // This is a tracking test for all channel creation
     let mut app1 = AppBuilder::default()
@@ -113,7 +113,7 @@ fn channel_creation() -> anyhow::Result<()> {
 }
 
 #[test]
-fn channel_unknown_port() -> anyhow::Result<()> {
+fn channel_unknown_port() -> StdResult<()> {
     // Here we want to create a channel between 2 bank modules to make sure that we are able to create a channel correctly
     // This is a tracking test for all channel creation
 

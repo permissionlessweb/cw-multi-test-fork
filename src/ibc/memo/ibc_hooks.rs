@@ -1,11 +1,12 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Api, Binary};
+use cosmwasm_std::{Addr, Api, Binary, StdResult};
 use cw20_ics20::ibc::Ics20Packet;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::ibc::types::keccak256;
 
-#[cw_serde]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct IbcHooksMemo {
     wasm: Option<IbcHooksMemoWasm>,
 }
@@ -15,7 +16,7 @@ pub struct IbcHooksCallbackMemo {
     ibc_callback: String,
 }
 
-#[cw_serde]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct IbcHooksMemoWasm {
     contract: String,
     msg: Value,
@@ -25,7 +26,7 @@ pub fn parse_ibc_hooks_memo(
     api: &dyn Api,
     channel_id: String,
     packet: &mut Ics20Packet,
-) -> anyhow::Result<Option<(Addr, String, Value)>> {
+) -> StdResult<Option<(Addr, String, Value)>> {
     if let Some(memo) = &packet.memo {
         // We match the memo to the IBC hooks format
         // If it matches, we create the ibc hook sender. They will be the recipient of the funds and the sender of the contract call
@@ -50,7 +51,7 @@ pub fn parse_ibc_hooks_memo(
 pub fn parse_ibc_hooks_callback_memo(
     api: &dyn Api,
     packet: &Ics20Packet,
-) -> anyhow::Result<Option<Addr>> {
+) -> StdResult<Option<Addr>> {
     if let Some(memo) = &packet.memo {
         // We match the memo to the IBC hooks format
         // If it matches, we create the ibc hook sender. They will be the recipient of the funds and the sender of the contract call

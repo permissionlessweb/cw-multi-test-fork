@@ -1,6 +1,7 @@
 use cosmwasm_std::{
-    coin, from_json, testing::MockApi, to_json_binary, AllBalanceResponse, BankQuery, CosmosMsg,
-    Empty, IbcMsg, IbcOrder, IbcTimeout, IbcTimeoutBlock, Querier, QueryRequest, StdAck,
+    coin, from_json, testing::MockApi, to_json_binary, BalanceResponse, BankQuery, CosmosMsg,
+    Empty, IbcMsg, IbcOrder, IbcTimeout, IbcTimeoutBlock, Querier, QueryRequest, StdAck, StdResult,
+    Uint256,
 };
 
 use cw_multi_test::{
@@ -18,7 +19,7 @@ use cw_multi_test::{
 /// We try in the implementation to stay simple but as close as the real deal as possible
 
 #[test]
-fn simple_transfer() -> anyhow::Result<()> {
+fn simple_transfer() -> StdResult<()> {
     let funds = coin(100_000, "ufund");
 
     let mut app1 = AppBuilder::default()
@@ -75,30 +76,31 @@ fn simple_transfer() -> anyhow::Result<()> {
     // We relaying all packets found in the transaction
     let result = relay_packets_in_tx(&mut app1, &mut app2, send_response)?;
     let ics20_ack = result.iter().any(|packet| {
-        if let RelayingResult::Acknowledgement { ack, .. } = &packet.result {
+        if let RelayingResult::Acknowledgement { ack, tx: _ } = &packet.result {
             ack.eq(&StdAck::success(SUCCESS_BANK_ACK).to_binary())
         } else {
             false
         }
     });
     assert!(ics20_ack);
-
     // We make sure the balance of the reciepient has changed
-    let balances = app2.wrap().query_all_balances(fund_recipient)?;
+    let balances = app2.wrap().query_balance(
+        fund_recipient,
+        app2.wrap_ibc_denom("channel-0", &funds.denom),
+    )?;
 
     // The recipient has received exactly what they needs
-    assert_eq!(balances.len(), 1);
-    assert_eq!(balances[0].amount, funds.amount);
+    assert_eq!(balances.amount, funds.amount);
 
     // We make sure the balance of the sender has changed as well
-    let balances = app1.wrap().query_all_balances(fund_owner)?;
-    assert!(balances.is_empty());
+    let balances = app1.wrap().query_balance(fund_owner, "ufund")?;
+    assert_eq!(balances.amount, Uint256::zero());
 
     Ok(())
 }
 
 #[test]
-fn transfer_and_back() -> anyhow::Result<()> {
+fn transfer_and_back() -> StdResult<()> {
     let funds = coin(100_000, "ufund");
 
     let port1 = "transfer".to_string();
@@ -176,7 +178,7 @@ fn transfer_and_back() -> anyhow::Result<()> {
 
     let remote_denom = app1.wrap_ibc_denom(&dst_channel, &funds.denom);
 
-    let chain2_funds = coin(funds.amount.u128(), remote_denom);
+    let chain2_funds = coin(funds.amount.to_string().parse()?, remote_denom);
     // We send an IBC transfer back from app2
     let send_back_response = app2.execute(
         fund_recipient.clone(),
@@ -198,32 +200,33 @@ fn transfer_and_back() -> anyhow::Result<()> {
     // We make sure the balance of the reciepient has changed
     let balances = app2
         .raw_query(
-            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::AllBalances {
+            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::Balance {
                 address: fund_recipient.to_string(),
+                denom: funds.denom.to_string(),
             }))?
             .as_slice(),
         )
         .into_result()?
         .unwrap();
-    let balances: AllBalanceResponse = from_json(balances)?;
-    assert!(balances.amount.is_empty());
+    let balances: BalanceResponse = from_json(balances)?;
+    assert_eq!(balances.amount.amount, Uint256::zero());
 
     // We make sure the balance of the sender has changed as well
     let balances = app1
         .raw_query(
-            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::AllBalances {
+            to_json_binary(&QueryRequest::<Empty>::Bank(BankQuery::Balance {
                 address: fund_owner.to_string(),
+                denom: funds.denom.to_string(),
             }))?
             .as_slice(),
         )
         .into_result()?
         .unwrap();
-    let balances: AllBalanceResponse = from_json(balances)?;
+    let balances: BalanceResponse = from_json(balances)?;
 
     // The owner has back exactly what they need
-    assert_eq!(balances.amount.len(), 1);
-    assert_eq!(balances.amount[0].amount, funds.amount);
-    assert_eq!(balances.amount[0].denom, funds.denom);
+    assert_eq!(balances.amount.amount, funds.amount);
+    assert_eq!(balances.amount.denom, funds.denom);
 
     // // TODO:  We can't verify the funds are locked because the IBC_LOCK_MODULE_ADDRESS is not valid
     // // Same for ibc lock address

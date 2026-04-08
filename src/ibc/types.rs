@@ -1,13 +1,12 @@
-use anyhow::bail;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     Addr, Binary, Event, IbcChannel, IbcChannelOpenResponse, IbcEndpoint, IbcOrder, IbcPacket,
-    IbcQuery, IbcTimeout,
+    IbcQuery, IbcTimeout, StdError,
 };
 use std::{fmt::Display, str::FromStr};
 use tiny_keccak::{Hasher, Keccak};
 
-use crate::app::IbcModule;
+use crate::{app::IbcModule, error::std_error_bail};
 
 #[cosmwasm_schema::cw_serde]
 /// IBC connection
@@ -86,7 +85,7 @@ impl Display for MockIbcPort {
 }
 
 impl FromStr for MockIbcPort {
-    type Err = anyhow::Error;
+    type Err = StdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // For the bank module
@@ -100,7 +99,7 @@ impl FromStr for MockIbcPort {
             return Ok(MockIbcPort::Wasm(wasm[1].to_string()));
         }
         // Error
-        bail!(
+        std_error_bail!(
             "The ibc port {} can't be linked to an mock ibc implementation",
             s
         )
