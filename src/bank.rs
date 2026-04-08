@@ -122,10 +122,20 @@ impl BankKeeper {
             .map_err(Into::into)
     }
 
-    /// Returns balance for specified address.
+    /// Returns balance for specified address (from pre-prefixed storage).
     fn get_balance(&self, bank_storage: &dyn Storage, addr: &Addr) -> StdResult<Vec<Coin>> {
         let val = BALANCES.may_load(bank_storage, addr)?;
         Ok(val.unwrap_or_default().into_vec())
+    }
+
+    /// Returns all balances for the specified address (from raw storage).
+    pub fn get_all_balances(
+        &self,
+        storage: &dyn Storage,
+        account: &Addr,
+    ) -> StdResult<Vec<Coin>> {
+        let bank_storage = prefixed_read(storage, NAMESPACE_BANK);
+        self.get_balance(&bank_storage, account)
     }
 
     #[cfg(feature = "cosmwasm_1_1")]
