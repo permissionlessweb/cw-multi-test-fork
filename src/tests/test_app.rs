@@ -1,5 +1,4 @@
 use crate::custom_handler::CachingCustomHandler;
-use crate::error::{bail, AnyResult};
 use crate::featured::staking::{Distribution, Staking};
 use crate::test_helpers::echo::EXECUTE_REPLY_BASE_ID;
 use crate::test_helpers::{caller, echo, error, hackatom, payout, reflect, CustomHelperMsg};
@@ -12,23 +11,21 @@ use crate::{
 use crate::{AppBuilder, IntoAddr};
 use cosmwasm_std::testing::{mock_env, MockQuerier};
 use cosmwasm_std::{
-    coin, coins, from_json, to_json_binary, Addr, AllBalanceResponse, Api, Attribute, BankMsg,
-    BankQuery, Binary, BlockInfo, Coin, CosmosMsg, CustomMsg, CustomQuery, Empty, Event,
-    OverflowError, OverflowOperation, Querier, Reply, StdError, StdResult, Storage, SubMsg,
-    WasmMsg,
+    coin, coins, from_json, to_json_binary, Addr, Api, Attribute, BalanceResponse, BankMsg,
+    BankQuery, Binary, BlockInfo, Coin, CosmosMsg, CustomMsg, CustomQuery, Empty, Event, Querier,
+    Reply, StdResult, Storage, SubMsg, WasmMsg,
 };
 use cw_storage_plus::Item;
 use cw_utils::parse_instantiate_response_data;
-use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 
-/// Utility function that returns all balances for specified address.
+/// Utility function that returns the balance for a specified address & token.
+/// V3.0.0: BankQuery::AllBalances was removed, destroying this function.
 fn get_balance<BankT, ApiT, StorageT, CustomT, WasmT>(
     app: &App<BankT, ApiT, StorageT, CustomT, WasmT>,
-    addr: &Addr,
-) -> Vec<Coin>
+    address: &Addr,
+    denom: &str,
+) -> Coin
 where
     CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
@@ -38,7 +35,7 @@ where
     StorageT: Storage,
     CustomT: Module,
 {
-    app.wrap().query_all_balances(addr).unwrap()
+    app.wrap().query_balance(address, denom).unwrap()
 }
 
 fn query_router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>(
@@ -46,7 +43,8 @@ fn query_router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT, StargateT>(
     api: &dyn Api,
     storage: &dyn Storage,
     rcpt: &Addr,
-) -> Vec<Coin>
+    denom: &str,
+) -> Coin
 where
     CustomT::ExecT: CustomMsg,
     CustomT::QueryT: CustomQuery + DeserializeOwned,
@@ -56,8 +54,9 @@ where
     StakingT: Staking,
     DistrT: Distribution,
 {
-    let query = BankQuery::AllBalances {
+    let query = BankQuery::Balance {
         address: rcpt.into(),
+        denom: denom.to_string(),
     };
     let block = mock_env().block;
     let querier: MockQuerier<CustomT::QueryT> = MockQuerier::new(&[]);
@@ -65,14 +64,15 @@ where
         .bank
         .query(api, storage, &querier, &block, query)
         .unwrap();
-    let val: AllBalanceResponse = from_json(res).unwrap();
+    let val: BalanceResponse = from_json(res).unwrap();
     val.amount
 }
 
 fn query_app<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT>(
     app: &App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT>,
     rcpt: &Addr,
-) -> Vec<Coin>
+    denom: &str,
+) -> Coin
 where
     CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
@@ -84,11 +84,12 @@ where
     StakingT: Staking,
     DistrT: Distribution,
 {
-    let query = BankQuery::AllBalances {
+    let query = BankQuery::Balance {
         address: rcpt.into(),
+        denom: denom.to_string(),
     }
     .into();
-    let val: AllBalanceResponse = app.wrap().query(&query).unwrap();
+    let val: BalanceResponse = app.wrap().query(&query).unwrap();
     val.amount
 }
 
@@ -138,10 +139,11 @@ fn multi_level_bank_cache() {
         .unwrap();
 
     // shows up in cache
-    let cached_rcpt = query_router(app.router(), app.api(), &cache, &recipient_addr);
-    assert_eq!(coins(25, "eth"), cached_rcpt);
-    let router_rcpt = query_app(&app, &recipient_addr);
-    assert_eq!(router_rcpt, vec![]);
+    assert_eq!(
+        coin(25, "eth"),
+        query_router(app.router(), app.api(), &cache, &recipient_addr, "eth")
+    );
+    assert_eq!(coin(0, "eth"), query_app(&app, &recipient_addr, "eth"));
 
     // now, second level cache
     transactional(&mut cache, |cache2, read| {
@@ -154,10 +156,14 @@ fn multi_level_bank_cache() {
             .unwrap();
 
         // shows up in 2nd cache
-        let cached_rcpt = query_router(app.router(), app.api(), read, &recipient_addr);
-        assert_eq!(coins(25, "eth"), cached_rcpt);
-        let cached2_rcpt = query_router(app.router(), app.api(), cache2, &recipient_addr);
-        assert_eq!(coins(37, "eth"), cached2_rcpt);
+        assert_eq!(
+            coin(25, "eth"),
+            query_router(app.router(), app.api(), read, &recipient_addr, "eth")
+        );
+        assert_eq!(
+            coin(37, "eth"),
+            query_router(app.router(), app.api(), cache2, &recipient_addr, "eth")
+        );
         Ok(())
     })
     .unwrap();
@@ -165,8 +171,7 @@ fn multi_level_bank_cache() {
     // apply first to router
     cache.prepare().commit(app.storage_mut());
 
-    let committed = query_app(&app, &recipient_addr);
-    assert_eq!(coins(37, "eth"), committed);
+    assert_eq!(coin(37, "eth"), query_app(&app, &recipient_addr, "eth"));
 }
 
 #[test]
@@ -219,10 +224,10 @@ fn send_tokens() {
     }
     .into();
     app.execute(owner_addr.clone(), msg.clone()).unwrap();
-    let rich = get_balance(&app, &owner_addr);
-    assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
-    let poor = get_balance(&app, &recipient_addr);
-    assert_eq!(vec![coin(10, "btc"), coin(30, "eth")], poor);
+    assert_eq!(coin(15, "btc"), get_balance(&app, &owner_addr, "btc"));
+    assert_eq!(coin(70, "eth"), get_balance(&app, &owner_addr, "eth"));
+    assert_eq!(coin(10, "btc"), get_balance(&app, &recipient_addr, "btc"));
+    assert_eq!(coin(30, "eth"), get_balance(&app, &recipient_addr, "eth"));
 
     // can send from other account (but funds will be deducted from sender)
     app.execute(recipient_addr.clone(), msg).unwrap();
@@ -235,8 +240,8 @@ fn send_tokens() {
     .into();
     app.execute(owner_addr.clone(), msg).unwrap_err();
 
-    let rich = get_balance(&app, &owner_addr);
-    assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
+    assert_eq!(coin(15, "btc"), get_balance(&app, &owner_addr, "btc"));
+    assert_eq!(coin(70, "eth"), get_balance(&app, &owner_addr, "eth"));
 }
 
 #[test]
@@ -283,16 +288,15 @@ fn simple_contract() {
     );
 
     // sender funds deducted
-    let sender = get_balance(&app, &owner_addr);
-    assert_eq!(sender, vec![coin(20, "btc"), coin(77, "eth")]);
+    assert_eq!(coin(20, "btc"), get_balance(&app, &owner_addr, "btc"));
+    assert_eq!(coin(77, "eth"), get_balance(&app, &owner_addr, "eth"));
     // get contract address, has funds
-    let funds = get_balance(&app, &contract_addr);
-    assert_eq!(funds, coins(23, "eth"));
+    assert_eq!(coin(23, "eth"), get_balance(&app, &contract_addr, "eth"));
 
     // create empty account
     let random_addr = app.api().addr_make("random");
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, vec![]);
+    assert_eq!(coin(0, "btc"), get_balance(&app, &random_addr, "btc"));
+    assert_eq!(coin(0, "eth"), get_balance(&app, &random_addr, "eth"));
 
     // do one payout and see money coming in
     let res = app
@@ -320,11 +324,9 @@ fn simple_contract() {
     assert_eq!(&expected_transfer, &res.events[2]);
 
     // random got cash
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, coins(5, "eth"));
+    assert_eq!(coin(5, "eth"), get_balance(&app, &random_addr, "eth"));
     // contract lost it
-    let funds = get_balance(&app, &contract_addr);
-    assert_eq!(funds, coins(18, "eth"));
+    assert_eq!(coin(18, "eth"), get_balance(&app, &contract_addr, "eth"));
 }
 
 #[test]
@@ -343,14 +345,14 @@ fn reflect_success() {
     });
 
     // set up payout contract
-    let payout_id = app.store_code(payout::contract());
+    let payout_code_id = app.store_code(payout::contract());
 
     let msg = payout::InstantiateMessage {
         payout: coin(5, "eth"),
     };
     let payout_addr = app
         .instantiate_contract(
-            payout_id,
+            payout_code_id,
             owner_addr.clone(),
             &msg,
             &coins(23, "eth"),
@@ -360,31 +362,29 @@ fn reflect_success() {
         .unwrap();
 
     // set up reflect contract
-    let reflect_id = app.store_code(reflect::contract());
+    let reflect_code_id = app.store_code(reflect::contract());
 
     let reflect_addr = app
-        .instantiate_contract(reflect_id, owner_addr, &Empty {}, &[], "Reflect", None)
+        .instantiate_contract(reflect_code_id, owner_addr, &Empty {}, &[], "Reflect", None)
         .unwrap();
 
     // reflect account is empty
-    let funds = get_balance(&app, &reflect_addr);
-    assert_eq!(funds, vec![]);
+    assert_eq!(coin(0, "btc"), get_balance(&app, &reflect_addr, "btc"));
+    assert_eq!(coin(0, "eth"), get_balance(&app, &reflect_addr, "eth"));
     // reflect count is 1
     let query_res: payout::CountResponse = app
         .wrap()
-        .query_wasm_smart(&reflect_addr, &reflect::QueryMsg::Count {})
+        .query_wasm_smart(&reflect_addr, &reflect::QueryMessage::Count)
         .unwrap();
     assert_eq!(0, query_res.count);
 
     // reflecting payout message pays reflect contract
-    let msg = SubMsg::new(WasmMsg::Execute {
+    let msg = SubMsg::<Empty>::new(WasmMsg::Execute {
         contract_addr: payout_addr.clone().into(),
         msg: b"{}".into(),
         funds: vec![],
     });
-    let msgs = reflect::Message {
-        messages: vec![msg],
-    };
+    let msgs = reflect::ExecMessage { sub_msg: vec![msg] };
     let res = app
         .execute_contract(random_addr, reflect_addr.clone(), &msgs, &[])
         .unwrap();
@@ -424,13 +424,12 @@ fn reflect_success() {
     assert_eq!(second.attributes[2], ("amount", "5eth"));
 
     // ensure transfer was executed with reflect as sender
-    let funds = get_balance(&app, &reflect_addr);
-    assert_eq!(funds, coins(5, "eth"));
+    assert_eq!(coin(5, "eth"), get_balance(&app, &reflect_addr, "eth"));
 
     // reflect count updated
     let query_res: payout::CountResponse = app
         .wrap()
-        .query_wasm_smart(&reflect_addr, &reflect::QueryMsg::Count {})
+        .query_wasm_smart(&reflect_addr, &reflect::QueryMessage::Count)
         .unwrap();
     assert_eq!(1, query_res.count);
 }
@@ -464,18 +463,15 @@ fn reflect_error() {
         .unwrap();
 
     // reflect has 40 eth
-    let funds = get_balance(&app, &reflect_addr);
-    assert_eq!(funds, coins(40, "eth"));
+    assert_eq!(coin(40, "eth"), get_balance(&app, &reflect_addr, "eth"));
     let random_addr = app.api().addr_make("random");
 
     // sending 7 eth works
-    let msg = SubMsg::new(BankMsg::Send {
+    let msg = SubMsg::<Empty>::new(BankMsg::Send {
         to_address: random_addr.clone().into(),
         amount: coins(7, "eth"),
     });
-    let msgs = reflect::Message {
-        messages: vec![msg],
-    };
+    let msgs = reflect::ExecMessage { sub_msg: vec![msg] };
     let res = app
         .execute_contract(random_addr.clone(), reflect_addr.clone(), &msgs, &[])
         .unwrap();
@@ -490,44 +486,44 @@ fn reflect_error() {
     assert_eq!(transfer.ty.as_str(), "transfer");
 
     // ensure random got paid
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, coins(7, "eth"));
+    assert_eq!(coin(7, "eth"), get_balance(&app, &random_addr, "eth"));
 
     // reflect count should be updated to 1
     let query_res: payout::CountResponse = app
         .wrap()
-        .query_wasm_smart(&reflect_addr, &reflect::QueryMsg::Count {})
+        .query_wasm_smart(&reflect_addr, &reflect::QueryMessage::Count)
         .unwrap();
     assert_eq!(1, query_res.count);
 
     // sending 8 eth, then 3 btc should fail both
-    let msg = SubMsg::new(BankMsg::Send {
+    let msg = SubMsg::<Empty>::new(BankMsg::Send {
         to_address: random_addr.clone().into(),
         amount: coins(8, "eth"),
     });
-    let msg2 = SubMsg::new(BankMsg::Send {
+    let msg2 = SubMsg::<Empty>::new(BankMsg::Send {
         to_address: random_addr.clone().into(),
         amount: coins(3, "btc"),
     });
-    let msgs = reflect::Message {
-        messages: vec![msg, msg2],
+    let msgs = reflect::ExecMessage {
+        sub_msg: vec![msg, msg2],
     };
     let err = app
         .execute_contract(random_addr.clone(), reflect_addr.clone(), &msgs, &[])
         .unwrap_err();
-    assert_eq!(
-        StdError::overflow(OverflowError::new(OverflowOperation::Sub)),
-        err.downcast().unwrap()
+
+    let err_str = err.to_string();
+    assert!(
+        err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+            && err_str.contains("Cannot Sub with given operands")
     );
 
     // first one should have been rolled-back on error (no second payment)
-    let funds = get_balance(&app, &random_addr);
-    assert_eq!(funds, coins(7, "eth"));
+    assert_eq!(coin(7, "eth"), get_balance(&app, &random_addr, "eth"));
 
     // failure should not update reflect count
     let query_res: payout::CountResponse = app
         .wrap()
-        .query_wasm_smart(&reflect_addr, &reflect::QueryMsg::Count {})
+        .query_wasm_smart(&reflect_addr, &reflect::QueryMessage::Count)
         .unwrap();
     assert_eq!(1, query_res.count);
 }
@@ -625,21 +621,19 @@ fn reflect_sub_message_reply_works() {
         .unwrap();
 
     // no reply written beforehand
-    let query = reflect::QueryMsg::Reply { id: 123 };
+    let query = reflect::QueryMessage::Reply { id: 123 };
     let res: StdResult<Reply> = app.wrap().query_wasm_smart(&reflect_addr, &query);
     res.unwrap_err();
 
     // reflect sends 7 eth, success
-    let msg = SubMsg::reply_always(
+    let msg = SubMsg::<Empty>::reply_always(
         BankMsg::Send {
             to_address: random.clone().into(),
             amount: coins(7, "eth"),
         },
         123,
     );
-    let msgs = reflect::Message {
-        messages: vec![msg],
-    };
+    let msgs = reflect::ExecMessage { sub_msg: vec![msg] };
     let res = app
         .execute_contract(random.clone(), reflect_addr.clone(), &msgs, &[])
         .unwrap();
@@ -664,26 +658,23 @@ fn reflect_sub_message_reply_works() {
     AppResponse::from(reply).assert_event(&Event::new("transfer").add_attribute("amount", "7eth"));
 
     // reflect sends 300 btc, failure, but error caught by sub-message (so shows success)
-    let msg = SubMsg::reply_always(
+    let msg = SubMsg::<Empty>::reply_always(
         BankMsg::Send {
             to_address: random.clone().into(),
             amount: coins(300, "btc"),
         },
         456,
     );
-    let msgs = reflect::Message {
-        messages: vec![msg],
-    };
+    let msgs = reflect::ExecMessage { sub_msg: vec![msg] };
     let _res = app
         .execute_contract(random, reflect_addr.clone(), &msgs, &[])
         .unwrap();
 
     // ensure error was written
-    let query = reflect::QueryMsg::Reply { id: 456 };
+    let query = reflect::QueryMessage::Reply { id: 456 };
     let res: Reply = app.wrap().query_wasm_smart(&reflect_addr, &query).unwrap();
     assert_eq!(res.id, 456);
     assert!(res.result.is_err());
-    // TODO: check error?
 }
 
 #[test]
@@ -871,23 +862,25 @@ fn sent_funds_properly_visible_on_execution() {
     )
     .unwrap();
 
-    // Check balance of all accounts to ensure no tokens where burned or created, and they are
-    // in correct places
-    assert_eq!(get_balance(&app, &owner_addr), &[]);
-    assert_eq!(get_balance(&app, &contract), &[]);
-    assert_eq!(get_balance(&app, &beneficiary_addr), coins(30, "btc"));
+    // Check balance of all accounts to ensure no tokens where burned or created,
+    // and they are in correct places
+    assert_eq!(get_balance(&app, &owner_addr, "btc"), coin(0, "btc"));
+    assert_eq!(get_balance(&app, &contract, "btc"), coin(0, "btc"));
+    assert_eq!(get_balance(&app, &beneficiary_addr, "btc"), coin(30, "btc"));
 }
 
 /// Demonstrates that we can mint tokens and send from other accounts
 /// via a custom module, as an example of ability to do privileged actions.
 mod custom_handler {
+
     use super::*;
+    use crate::error::std_error_bail;
     use crate::{BankSudo, BasicAppBuilder};
 
     const LOTTERY: Item<Coin> = Item::new("lottery");
     const PITY: Item<Coin> = Item::new("pity");
 
-    #[derive(Clone, Debug, PartialEq, JsonSchema, Serialize, Deserialize)]
+    #[cosmwasm_schema::cw_serde]
     struct CustomLotteryMsg {
         // we mint LOTTERY tokens to this one
         lucky_winner: String,
@@ -912,7 +905,7 @@ mod custom_handler {
             block: &BlockInfo,
             _sender: Addr,
             msg: Self::ExecT,
-        ) -> AnyResult<AppResponse>
+        ) -> StdResult<AppResponse>
         where
             ExecC: CustomMsg + DeserializeOwned + 'static,
             QueryC: CustomQuery + DeserializeOwned + 'static,
@@ -938,21 +931,6 @@ mod custom_handler {
             Ok(AppResponse::default())
         }
 
-        fn sudo<ExecC, QueryC>(
-            &self,
-            _api: &dyn Api,
-            _storage: &mut dyn Storage,
-            _router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
-            _block: &BlockInfo,
-            _msg: Self::SudoT,
-        ) -> AnyResult<AppResponse>
-        where
-            ExecC: CustomMsg + DeserializeOwned + 'static,
-            QueryC: CustomQuery + DeserializeOwned + 'static,
-        {
-            bail!("sudo not implemented for CustomHandler")
-        }
-
         fn query(
             &self,
             _api: &dyn Api,
@@ -960,8 +938,23 @@ mod custom_handler {
             _querier: &dyn Querier,
             _block: &BlockInfo,
             _request: Self::QueryT,
-        ) -> AnyResult<Binary> {
-            bail!("query not implemented for CustomHandler")
+        ) -> StdResult<Binary> {
+            std_error_bail!("query not implemented for CustomHandler")
+        }
+
+        fn sudo<ExecC, QueryC>(
+            &self,
+            _api: &dyn Api,
+            _storage: &mut dyn Storage,
+            _router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
+            _block: &BlockInfo,
+            _msg: Self::SudoT,
+        ) -> StdResult<AppResponse>
+        where
+            ExecC: CustomMsg + DeserializeOwned + 'static,
+            QueryC: CustomQuery + DeserializeOwned + 'static,
+        {
+            std_error_bail!("sudo not implemented for CustomHandler")
         }
     }
 
@@ -972,7 +965,7 @@ mod custom_handler {
             storage: &mut dyn Storage,
             lottery: Coin,
             pity: Coin,
-        ) -> AnyResult<()> {
+        ) -> StdResult<()> {
             LOTTERY.save(storage, &lottery)?;
             PITY.save(storage, &pity)?;
             Ok(())
@@ -1022,292 +1015,329 @@ mod custom_handler {
 mod reply_data_overwrite {
     use super::*;
 
-    fn make_echo_submsg(
-        contract: Addr,
+    fn make_echo_exec_msg(
+        contract_addr: Addr,
+        data: impl Into<Option<&'static str>>,
+        sub_msg: Vec<SubMsg>,
+    ) -> CosmosMsg {
+        let data = data.into().map(|s| s.to_string());
+        CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: contract_addr.into(),
+            msg: to_json_binary(&echo::ExecMessage {
+                data,
+                sub_msg,
+                ..Default::default()
+            })
+            .unwrap(),
+            funds: vec![],
+        })
+    }
+
+    fn make_echo_reply_always_submsg(
+        contract_addr: Addr,
         data: impl Into<Option<&'static str>>,
         sub_msg: Vec<SubMsg>,
         id: u64,
     ) -> SubMsg {
-        let data = data.into().map(|s| s.to_owned());
-        SubMsg::reply_always(
-            CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: contract.into(),
-                msg: to_json_binary(&echo::Message {
-                    data,
-                    sub_msg,
-                    ..echo::Message::default()
-                })
-                .unwrap(),
-                funds: vec![],
-            }),
-            id,
-        )
+        SubMsg::reply_always(make_echo_exec_msg(contract_addr, data, sub_msg), id)
     }
 
-    fn make_echo_submsg_no_reply(
-        contract: Addr,
+    fn make_echo_reply_never_submsg(
+        contract_addr: Addr,
         data: impl Into<Option<&'static str>>,
         sub_msg: Vec<SubMsg>,
     ) -> SubMsg {
-        let data = data.into().map(|s| s.to_owned());
-        SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: contract.into(),
-            msg: to_json_binary(&echo::Message {
-                data,
-                sub_msg,
-                ..echo::Message::default()
-            })
-            .unwrap(),
-            funds: vec![],
-        }))
+        SubMsg::reply_never(make_echo_exec_msg(contract_addr, data, sub_msg))
     }
 
     #[test]
     fn no_submsg() {
-        let mut app = App::default();
+        // create a chain with default settings
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        // prepare the owner address
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        // store the echo contract on chain
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        // instantiate the echo contract
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
-            .execute_contract(
-                owner,
-                contract,
-                &echo::Message::<Empty> {
-                    data: Some("Data".to_owned()),
-                    ..echo::Message::default()
-                },
-                &[],
-            )
+        // prepare the message to be executed by echo contract
+        // send only data payload without any submessages
+        let echo_exec_msg = echo::ExecMessage::<Empty> {
+            data: "PAYLOAD".to_string().into(),
+            ..Default::default()
+        };
+
+        // execute the message
+        let response = chain
+            .execute_contract(owner, echo_contract_addr, &echo_exec_msg, &[])
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Data".into()));
+        // the returned data should be the same as the one being previously sent
+        assert_eq!(response.data, Some(b"PAYLOAD".into()));
     }
 
     #[test]
     fn single_submsg() {
-        let mut app = App::default();
+        // create a chain with default settings
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        // prepare the owner address
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        // store the echo contract on chain
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        // instantiate the echo contract
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
-            .execute_contract(
-                owner,
-                contract.clone(),
-                &echo::Message {
-                    data: Some("First".to_owned()),
-                    sub_msg: vec![make_echo_submsg(
-                        contract,
-                        "Second",
-                        vec![],
-                        EXECUTE_REPLY_BASE_ID,
-                    )],
-                    ..echo::Message::default()
-                },
-                &[],
-            )
+        // prepare the message to be executed by echo contract
+        let echo_exec_msg = echo::ExecMessage::<Empty> {
+            data: "FIRST".to_string().into(),
+            sub_msg: vec![make_echo_reply_always_submsg(
+                echo_contract_addr.clone(),
+                "SECOND",
+                vec![],
+                EXECUTE_REPLY_BASE_ID,
+            )],
+            ..Default::default()
+        };
+
+        // execute the message
+        let response = chain
+            .execute_contract(owner, echo_contract_addr, &echo_exec_msg, &[])
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Second".into()));
+        // the returned data should be the data payload of the submessage
+        assert_eq!(response.data, Some(b"SECOND".into()));
     }
 
     #[test]
     fn single_submsg_no_reply() {
-        let mut app = App::default();
+        // create a chain with default settings
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        // prepare the owner address
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        // store the echo contract on chain
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        // instantiate the echo contract
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
-            .execute_contract(
-                owner,
-                contract.clone(),
-                &echo::Message {
-                    data: Some("First".to_owned()),
-                    sub_msg: vec![make_echo_submsg_no_reply(contract, "Second", vec![])],
-                    ..echo::Message::default()
-                },
-                &[],
-            )
+        // prepare the message to be executed by echo contract
+        let echo_exec_msg = echo::ExecMessage::<Empty> {
+            data: "FIRST".to_string().into(),
+            sub_msg: vec![make_echo_reply_never_submsg(
+                echo_contract_addr.clone(),
+                "SECOND",
+                vec![],
+            )],
+            ..Default::default()
+        };
+
+        // execute the message
+        let response = chain
+            .execute_contract(owner, echo_contract_addr, &echo_exec_msg, &[])
             .unwrap();
 
-        assert_eq!(response.data, Some(b"First".into()));
+        // the returned data should be the data payload of the original message
+        assert_eq!(response.data, Some(b"FIRST".into()));
     }
 
     #[test]
     fn single_no_submsg_data() {
-        let mut app = App::default();
+        // create a chain with default settings
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        // prepare the owner address
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        // store the echo contract on chain
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
-            .execute_contract(
-                owner,
-                contract.clone(),
-                &echo::Message {
-                    data: Some("First".to_owned()),
-                    sub_msg: vec![make_echo_submsg(contract, None, vec![], 1)],
-                    ..echo::Message::default()
-                },
-                &[],
-            )
+        let echo_exec_msg = echo::ExecMessage {
+            data: "FIRST".to_string().into(),
+            sub_msg: vec![make_echo_reply_always_submsg(
+                echo_contract_addr.clone(),
+                None,
+                vec![],
+                1,
+            )],
+            ..Default::default()
+        };
+
+        let response = chain
+            .execute_contract(owner, echo_contract_addr, &echo_exec_msg, &[])
             .unwrap();
 
-        assert_eq!(response.data, Some(b"First".into()));
+        assert_eq!(response.data, Some(b"FIRST".into()));
     }
 
     #[test]
     fn single_no_top_level_data() {
-        let mut app = App::default();
+        // create a chain with default settings
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
-            .execute_contract(
-                owner,
-                contract.clone(),
-                &echo::Message {
-                    sub_msg: vec![make_echo_submsg(
-                        contract,
-                        "Second",
-                        vec![],
-                        EXECUTE_REPLY_BASE_ID,
-                    )],
-                    ..echo::Message::default()
-                },
-                &[],
-            )
+        let echo_exec_msg = echo::ExecMessage {
+            data: None,
+            sub_msg: vec![make_echo_reply_always_submsg(
+                echo_contract_addr.clone(),
+                "SECOND",
+                vec![],
+                EXECUTE_REPLY_BASE_ID,
+            )],
+            ..Default::default()
+        };
+
+        let response = chain
+            .execute_contract(owner, echo_contract_addr, &echo_exec_msg, &[])
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Second".into()));
+        assert_eq!(response.data, Some(b"SECOND".into()));
     }
 
     #[test]
     fn single_submsg_reply_returns_none() {
+        // create a chain with default settings
+        let mut chain = App::default();
+
         // prepare user addresses
         let owner = addr_make("owner");
 
-        // set personal balance
-        let init_funds = coins(100, "tgd");
-        let mut app = custom_app::<CustomHelperMsg, Empty, _>(|router, _, storage| {
-            router
-                .bank
-                .init_balance(storage, &owner, init_funds)
-                .unwrap();
-        });
+        // store reflect contract on chain
+        let reflect_code_id = chain.store_code(reflect::contract());
 
-        // set up reflect contract
-        let reflect_id = app.store_code(reflect::contract());
-
-        let reflect_addr = app
-            .instantiate_contract(reflect_id, owner.clone(), &Empty {}, &[], "Reflect", None)
+        // instantiate reflect contract
+        let reflect_contract_addr = chain
+            .instantiate_contract(
+                reflect_code_id,
+                owner.clone(),
+                &Empty {},
+                &[],
+                "Reflect",
+                None,
+            )
             .unwrap();
 
-        // set up echo contract
-        let echo_id = app.store_code(echo::custom_contract());
+        // store the echo contract on chain
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let echo_addr = app
-            .instantiate_contract(echo_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        // instantiate the echo contract
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        // reflect will call echo
-        // echo will set the data
-        // top-level app will not display the data
-        let echo_msg = echo::Message::<Empty> {
-            data: Some("my echo".into()),
-            events: vec![Event::new("echo").add_attribute("called", "true")],
-            ..echo::Message::default()
+        // firstly reflect contract will call echo contract, then the echo contract will return the data,
+        // but there is no submessage, so no reply entrypoint of reflect contract will be called,
+        // finally the top-level app (this test) will not display any data
+
+        // prepare the echo execute message
+        let echo_msg = echo::ExecMessage::<Empty> {
+            data: Some("ORIGINAL".into()),
+            ..Default::default()
         };
-        let reflect_msg = reflect::Message {
-            messages: vec![SubMsg::new(WasmMsg::Execute {
-                contract_addr: echo_addr.to_string(),
+
+        // prepare reflect execute message
+        let reflect_msg = reflect::ExecMessage::<Empty> {
+            sub_msg: vec![SubMsg::reply_never(WasmMsg::Execute {
+                contract_addr: echo_contract_addr.to_string(),
                 msg: to_json_binary(&echo_msg).unwrap(),
                 funds: vec![],
             })],
         };
 
-        let res = app
-            .execute_contract(owner, reflect_addr.clone(), &reflect_msg, &[])
+        // execute reflect message
+        let response = chain
+            .execute_contract(owner, reflect_contract_addr.clone(), &reflect_msg, &[])
             .unwrap();
 
-        // ensure data is empty
-        assert_eq!(res.data, None);
-        // ensure expected events
-        assert_eq!(res.events.len(), 3, "{:?}", res.events);
-        res.assert_event(&Event::new("execute").add_attribute("_contract_address", &reflect_addr));
-        res.assert_event(&Event::new("execute").add_attribute("_contract_address", &echo_addr));
-        res.assert_event(&Event::new("wasm-echo"));
+        // ensure the data in response is empty
+        assert_eq!(response.data, None);
+        // ensure expected events are returned
+        assert_eq!(response.events.len(), 2);
+        let make_event = |contract_addr: &Addr| {
+            Event::new("execute").add_attribute("_contract_address", contract_addr)
+        };
+        response.assert_event(&make_event(&reflect_contract_addr));
+        response.assert_event(&make_event(&echo_contract_addr));
     }
 
     #[test]
     fn multiple_submsg() {
-        let mut app = App::default();
+        // create a chain with default settings
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        // prepare user addresses
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
+        let response = chain
             .execute_contract(
                 owner,
-                contract.clone(),
-                &echo::Message {
-                    data: Some("Orig".to_owned()),
+                echo_contract_addr.clone(),
+                &echo::ExecMessage {
+                    data: "ORIGINAL".to_string().into(),
                     sub_msg: vec![
-                        make_echo_submsg(contract.clone(), None, vec![], EXECUTE_REPLY_BASE_ID + 1),
-                        make_echo_submsg(
-                            contract.clone(),
-                            "First",
+                        make_echo_reply_always_submsg(
+                            echo_contract_addr.clone(),
+                            None,
+                            vec![],
+                            EXECUTE_REPLY_BASE_ID + 1,
+                        ),
+                        make_echo_reply_always_submsg(
+                            echo_contract_addr.clone(),
+                            "FIRST",
                             vec![],
                             EXECUTE_REPLY_BASE_ID + 2,
                         ),
-                        make_echo_submsg(
-                            contract.clone(),
-                            "Second",
+                        make_echo_reply_always_submsg(
+                            echo_contract_addr.clone(),
+                            "SECOND",
                             vec![],
                             EXECUTE_REPLY_BASE_ID + 3,
                         ),
-                        make_echo_submsg(contract, None, vec![], EXECUTE_REPLY_BASE_ID + 4),
+                        make_echo_reply_always_submsg(
+                            echo_contract_addr,
+                            None,
+                            vec![],
+                            EXECUTE_REPLY_BASE_ID + 4,
+                        ),
                     ],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Second".into()));
+        assert_eq!(response.data, Some(b"SECOND".into()));
     }
 
     #[test]
@@ -1326,90 +1356,100 @@ mod reply_data_overwrite {
             .execute_contract(
                 owner,
                 contract.clone(),
-                &echo::Message {
-                    data: Some("Orig".to_owned()),
+                &echo::ExecMessage {
+                    data: "ORIGINAL".to_string().into(),
                     sub_msg: vec![
-                        make_echo_submsg_no_reply(contract.clone(), None, vec![]),
-                        make_echo_submsg_no_reply(contract.clone(), "First", vec![]),
-                        make_echo_submsg_no_reply(contract.clone(), "Second", vec![]),
-                        make_echo_submsg_no_reply(contract, None, vec![]),
+                        make_echo_reply_never_submsg(contract.clone(), None, vec![]),
+                        make_echo_reply_never_submsg(contract.clone(), "FIRST", vec![]),
+                        make_echo_reply_never_submsg(contract.clone(), "SECOND", vec![]),
+                        make_echo_reply_never_submsg(contract, None, vec![]),
                     ],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Orig".into()));
+        assert_eq!(response.data, Some(b"ORIGINAL".into()));
     }
 
     #[test]
     fn multiple_submsg_mixed() {
-        let mut app = App::default();
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
+        let response = chain
             .execute_contract(
                 owner,
-                contract.clone(),
-                &echo::Message {
+                echo_contract_addr.clone(),
+                &echo::ExecMessage {
                     sub_msg: vec![
-                        make_echo_submsg(contract.clone(), None, vec![], EXECUTE_REPLY_BASE_ID + 1),
-                        make_echo_submsg_no_reply(contract.clone(), "Hidden", vec![]),
-                        make_echo_submsg(
-                            contract.clone(),
-                            "Shown",
+                        make_echo_reply_always_submsg(
+                            echo_contract_addr.clone(),
+                            None,
+                            vec![],
+                            EXECUTE_REPLY_BASE_ID + 1,
+                        ),
+                        make_echo_reply_never_submsg(echo_contract_addr.clone(), "FIRST", vec![]),
+                        make_echo_reply_always_submsg(
+                            echo_contract_addr.clone(),
+                            "SECOND",
                             vec![],
                             EXECUTE_REPLY_BASE_ID + 2,
                         ),
-                        make_echo_submsg(contract.clone(), None, vec![], EXECUTE_REPLY_BASE_ID + 3),
-                        make_echo_submsg_no_reply(contract, "Lost", vec![]),
+                        make_echo_reply_always_submsg(
+                            echo_contract_addr.clone(),
+                            None,
+                            vec![],
+                            EXECUTE_REPLY_BASE_ID + 3,
+                        ),
+                        make_echo_reply_never_submsg(echo_contract_addr, "THIRD", vec![]),
                     ],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Shown".into()));
+        assert_eq!(response.data, Some(b"SECOND".into()));
     }
 
     #[test]
     fn nested_submsg() {
-        let mut app = App::default();
+        let mut chain = App::default();
 
-        let owner = app.api().addr_make("owner");
+        let owner = chain.api().addr_make("owner");
 
-        let code_id = app.store_code(echo::contract());
+        let echo_code_id = chain.store_code(echo::contract());
 
-        let contract = app
-            .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "Echo", None)
+        let echo_contract_addr = chain
+            .instantiate_contract(echo_code_id, owner.clone(), &Empty {}, &[], "Echo", None)
             .unwrap();
 
-        let response = app
+        let response = chain
             .execute_contract(
                 owner,
-                contract.clone(),
-                &echo::Message {
-                    data: Some("Orig".to_owned()),
-                    sub_msg: vec![make_echo_submsg(
-                        contract.clone(),
+                echo_contract_addr.clone(),
+                &echo::ExecMessage {
+                    data: "ORIGINAL".to_string().into(),
+                    sub_msg: vec![make_echo_reply_always_submsg(
+                        echo_contract_addr.clone(),
                         None,
-                        vec![make_echo_submsg(
-                            contract.clone(),
-                            "First",
-                            vec![make_echo_submsg(
-                                contract.clone(),
-                                "Second",
-                                vec![make_echo_submsg(
-                                    contract,
+                        vec![make_echo_reply_always_submsg(
+                            echo_contract_addr.clone(),
+                            "FIRST",
+                            vec![make_echo_reply_always_submsg(
+                                echo_contract_addr.clone(),
+                                "SECOND",
+                                vec![make_echo_reply_always_submsg(
+                                    echo_contract_addr,
                                     None,
                                     vec![],
                                     EXECUTE_REPLY_BASE_ID + 4,
@@ -1420,19 +1460,18 @@ mod reply_data_overwrite {
                         )],
                         EXECUTE_REPLY_BASE_ID + 1,
                     )],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
             .unwrap();
 
-        assert_eq!(response.data, Some(b"Second".into()));
+        assert_eq!(response.data, Some(b"SECOND".into()));
     }
 }
 
 mod response_validation {
     use super::*;
-    use crate::error::Error;
 
     #[test]
     fn empty_attribute_key() {
@@ -1450,19 +1489,23 @@ mod response_validation {
             .execute_contract(
                 owner,
                 contract,
-                &echo::Message::<Empty> {
+                &echo::ExecMessage::<Empty> {
                     data: None,
                     attributes: vec![
                         Attribute::new("   ", "value"),
                         Attribute::new("proper", "proper_val"),
                     ],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
             .unwrap_err();
 
-        assert_eq!(Error::empty_attribute_key("value"), err.downcast().unwrap(),);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Empty attribute key. Value: value")
+        );
     }
 
     #[test]
@@ -1480,13 +1523,13 @@ mod response_validation {
             .execute_contract(
                 owner,
                 contract,
-                &echo::Message::<Empty> {
+                &echo::ExecMessage::<Empty> {
                     data: None,
                     attributes: vec![
                         Attribute::new("key", "   "),
                         Attribute::new("proper", "proper_val"),
                     ],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
@@ -1509,18 +1552,22 @@ mod response_validation {
             .execute_contract(
                 owner,
                 contract,
-                &echo::Message::<Empty> {
+                &echo::ExecMessage::<Empty> {
                     data: None,
                     events: vec![Event::new("event")
                         .add_attribute("   ", "value")
                         .add_attribute("proper", "proper_val")],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
             .unwrap_err();
 
-        assert_eq!(Error::empty_attribute_key("value"), err.downcast().unwrap());
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Empty attribute key. Value: value")
+        );
     }
 
     #[test]
@@ -1538,12 +1585,12 @@ mod response_validation {
             .execute_contract(
                 owner,
                 contract,
-                &echo::Message::<Empty> {
+                &echo::ExecMessage::<Empty> {
                     data: None,
                     events: vec![Event::new("event")
                         .add_attribute("key", "   ")
                         .add_attribute("proper", "proper_val")],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
@@ -1566,16 +1613,20 @@ mod response_validation {
             .execute_contract(
                 owner,
                 contract,
-                &echo::Message::<Empty> {
+                &echo::ExecMessage::<Empty> {
                     data: None,
                     events: vec![Event::new(" e "), Event::new("event")],
-                    ..echo::Message::default()
+                    ..Default::default()
                 },
                 &[],
             )
             .unwrap_err();
 
-        assert_eq!(Error::event_type_too_short("e"), err.downcast().unwrap());
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Event type too short: e")
+        );
     }
 }
 
@@ -1641,11 +1692,11 @@ mod wasm_queries {
         use super::*;
         let app = App::default();
         assert_eq!(
-            "Generic error: Querier contract error: code id: invalid",
+            "kind: Other, error: Querier contract error: kind: Other, error: code id: invalid",
             app.wrap().query_wasm_code_info(0).unwrap_err().to_string()
         );
         assert_eq!(
-            "Generic error: Querier contract error: code id 1: no such code",
+            "kind: Other, error: Querier contract error: kind: Other, error: code id 1: no such code",
             app.wrap().query_wasm_code_info(1).unwrap_err().to_string()
         );
     }
@@ -1666,7 +1717,7 @@ mod custom_messages {
         let sender = app.api().addr_make("sender");
         let owner = app.api().addr_make("owner");
 
-        let contract_id = app.store_code(echo::custom_contract());
+        let contract_id = app.store_code(echo::contract());
 
         let contract = app
             .instantiate_contract(contract_id, owner, &Empty {}, &[], "Echo", None)
@@ -1675,7 +1726,7 @@ mod custom_messages {
         app.execute_contract(
             sender,
             contract,
-            &echo::Message {
+            &echo::ExecMessage {
                 sub_msg: vec![SubMsg::new(CosmosMsg::Custom(CustomHelperMsg::SetAge {
                     age: 20,
                 }))],
@@ -1732,7 +1783,7 @@ mod protobuf_wrapped_data {
 
         let count: payout::CountResponse = app
             .wrap()
-            .query_wasm_smart(&parsed.contract_address, &reflect::QueryMsg::Count {})
+            .query_wasm_smart(&parsed.contract_address, &reflect::QueryMessage::Count)
             .unwrap();
         assert_eq!(count.count, 0);
     }
@@ -1785,7 +1836,7 @@ mod protobuf_wrapped_data {
             .unwrap();
 
         // another echo contract
-        let msg = echo::Message::<Empty> {
+        let msg = echo::ExecMessage::<Empty> {
             data: Some("Passed to contract instantiation, returned as reply, and then returned as response".into()),
             ..Default::default()
         };
@@ -1833,10 +1884,10 @@ mod protobuf_wrapped_data {
             .instantiate_contract(code_id, owner.clone(), &Empty {}, &[], "label", None)
             .unwrap();
 
-        // ensure the execute has the same wrapper as it should
-        let msg = echo::Message::<Empty> {
+        // ensure message has the same wrapper as it should
+        let msg = echo::ExecMessage::<Empty> {
             data: Some("hello".into()),
-            ..echo::Message::default()
+            ..echo::ExecMessage::default()
         };
         // execute_contract now decodes a protobuf wrapper, so we get the top-level response
         let exec_res = app.execute_contract(owner, echo_addr, &msg, &[]).unwrap();
@@ -1861,17 +1912,11 @@ mod errors {
             .instantiate_contract(code_id, owner, &msg, &[], "error", None)
             .unwrap_err();
 
-        // we should be able to retrieve the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Init failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 2 nested error types
-        // (the original error, WasmMsg context)
-        assert_eq!(err.chain().count(), 2);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Init failed")
+        );
     }
 
     #[test]
@@ -1894,17 +1939,11 @@ mod errors {
             .execute_contract(random_addr, contract_addr, &msg, &[])
             .unwrap_err();
 
-        // we should be able to retrieve the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Handle failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 2 nested error types
-        // (the original error, WasmMsg context)
-        assert_eq!(err.chain().count(), 2);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Handle failed")
+        );
     }
 
     #[test]
@@ -1936,17 +1975,11 @@ mod errors {
             .execute_contract(random_addr, caller_addr, &msg, &[])
             .unwrap_err();
 
-        // we can get the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Handle failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 3 nested error types
-        // (the original error, 2 WasmMsg contexts)
-        assert_eq!(err.chain().count(), 3);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Handle failed")
+        );
     }
 
     #[test]
@@ -2000,19 +2033,10 @@ mod errors {
             .execute_contract(random_addr, caller_addr1, &msg, &[])
             .unwrap_err();
 
-        // uncomment to have the test fail and see how the error stringifies
-        // panic!("{:?}", err);
-
-        // we can get the original error by downcasting
-        let source: &StdError = err.downcast_ref().unwrap();
-        if let StdError::GenericErr { msg, .. } = source {
-            assert_eq!(msg, "Handle failed");
-        } else {
-            panic!("wrong StdError variant");
-        }
-
-        // We're expecting exactly 4 nested error types
-        // (the original error, 3 WasmMsg contexts)
-        assert_eq!(err.chain().count(), 4);
+        let err_str = err.to_string();
+        assert!(
+            err_str.starts_with("kind: Other, error: Error executing WasmMsg")
+                && err_str.contains("Handle failed")
+        );
     }
 }

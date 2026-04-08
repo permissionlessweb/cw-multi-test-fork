@@ -1,4 +1,5 @@
 #![cfg(test)]
+extern crate abstract_cw_multi_test as cw_multi_test;
 
 mod test_api;
 mod test_app;
@@ -6,7 +7,9 @@ mod test_app_builder;
 mod test_attributes;
 mod test_bank;
 mod test_contract_storage;
+mod test_ibc;
 mod test_module;
+mod test_payload;
 mod test_prefixed_storage;
 #[cfg(feature = "staking")]
 mod test_staking;
@@ -17,13 +20,15 @@ mod test_contracts {
     pub mod counter {
         use cosmwasm_schema::cw_serde;
         use cosmwasm_std::{
-            to_json_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError,
-            WasmMsg,
+            ensure_eq, from_json, to_json_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo,
+            Reply, Response, StdError, SubMsg, WasmMsg,
         };
         use cw_multi_test::{Contract, ContractWrapper};
         use cw_storage_plus::Item;
 
         const COUNTER: Item<u64> = Item::new("counter");
+        pub const REPLY_WITH_PAYLOAD_ID: u64 = 56;
+        pub const REPLY_WITH_PAYLOAD_PAYLOAD: &str = "This is my favorite payload";
 
         #[cw_serde]
         pub enum CounterQueryMsg {
@@ -47,7 +52,7 @@ mod test_contracts {
 
         fn execute(
             deps: DepsMut,
-            _env: Env,
+            env: Env,
             _info: MessageInfo,
             _msg: WasmMsg,
         ) -> Result<Response, StdError> {
@@ -55,7 +60,15 @@ mod test_contracts {
                 counter += 1;
                 COUNTER.save(deps.storage, &counter).unwrap();
             }
-            Ok(Response::default())
+            // Adds a reply with payload
+            let msg = WasmMsg::ClearAdmin {
+                contract_addr: env.contract.address.to_string(),
+            };
+
+            let sub_msg = SubMsg::reply_always(msg, REPLY_WITH_PAYLOAD_ID);
+
+            let sub_msg = sub_msg.with_payload(to_json_binary(REPLY_WITH_PAYLOAD_PAYLOAD)?);
+            Ok(Response::default().add_submessage(sub_msg))
         }
 
         fn query(deps: Deps, _env: Env, msg: CounterQueryMsg) -> Result<Binary, StdError> {
@@ -66,8 +79,21 @@ mod test_contracts {
             }
         }
 
+        fn reply(_deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, StdError> {
+            let Reply { payload, .. } = reply;
+
+            let decoded_payload: String = from_json(payload)?;
+            ensure_eq!(
+                decoded_payload,
+                REPLY_WITH_PAYLOAD_PAYLOAD,
+                StdError::msg("Payload doesn't match")
+            );
+
+            Ok(Response::new())
+        }
+
         pub fn contract() -> Box<dyn Contract<Empty>> {
-            Box::new(ContractWrapper::new_with_empty(execute, instantiate, query))
+            Box::new(ContractWrapper::new_with_empty(execute, instantiate, query).with_reply(reply))
         }
 
         #[cfg(feature = "cosmwasm_1_2")]

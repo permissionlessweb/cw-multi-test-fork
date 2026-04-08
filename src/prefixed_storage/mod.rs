@@ -1,10 +1,10 @@
 use cosmwasm_std::Storage;
 use cosmwasm_std::{Order, Record};
-use length_prefixed::{to_length_prefixed, to_length_prefixed_nested};
+pub use length_prefixed::{to_length_prefixed, to_length_prefixed_nested};
 use namespace_helpers::{get_with_prefix, range_with_prefix, remove_with_prefix, set_with_prefix};
-
 mod length_prefixed;
 mod namespace_helpers;
+pub mod typed_prefixed_storage;
 
 /// An alias of [PrefixedStorage::new] for less verbose usage.
 pub fn prefixed<'a>(storage: &'a mut dyn Storage, namespace: &[u8]) -> PrefixedStorage<'a> {
@@ -61,7 +61,7 @@ impl<'a> PrefixedStorage<'a> {
     }
 }
 
-impl<'a> Storage for PrefixedStorage<'a> {
+impl Storage for PrefixedStorage<'_> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         get_with_prefix(self.storage, &self.prefix, key)
     }
@@ -112,7 +112,7 @@ impl<'a> ReadonlyPrefixedStorage<'a> {
     }
 }
 
-impl<'a> Storage for ReadonlyPrefixedStorage<'a> {
+impl Storage for ReadonlyPrefixedStorage<'_> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         get_with_prefix(self.storage, &self.prefix, key)
     }

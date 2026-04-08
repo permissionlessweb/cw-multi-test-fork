@@ -6,13 +6,21 @@
 [![license][apache-badge]][apache-url]
 
 [crates-badge]: https://img.shields.io/crates/v/cw-multi-test.svg
+
 [crates-url]: https://crates.io/crates/cw-multi-test
+
 [docs-badge]: https://docs.rs/cw-multi-test/badge.svg
+
 [docs-url]: https://docs.rs/cw-multi-test
+
 [codecov-badge]: https://codecov.io/gh/CosmWasm/cw-multi-test/branch/main/graph/badge.svg?token=IYY72ZVS3X
+
 [codecov-url]: https://codecov.io/gh/CosmWasm/cw-multi-test
+
 [apache-badge]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
+
 [apache-url]: LICENSE
+
 [notice-url]: NOTICE
 
 **Testing tools for multi-contract interactions**
@@ -38,7 +46,7 @@ for various blockchain interaction tests.
 
 ```toml
 [dev-dependencies]
-cw-multi-test = { version = "2.1.0", features = ["staking", "stargate", "cosmwasm_2_0"] }
+cw-multi-test = { version = "2", features = ["staking", "stargate", "cosmwasm_2_1"] }
 ```
 
 Since version 2.1.0, **CosmWasm MultiTest** has no default features enabled.
@@ -54,6 +62,7 @@ The table below summarizes all available features:
 | **cosmwasm_1_3** | Enables `cosmwasm_1_2` in **MultiTest** and `cosmwasm_1_3` feature in **cosmwasm-std** dependency. |
 | **cosmwasm_1_4** | Enables `cosmwasm_1_3` in **MultiTest** and `cosmwasm_1_4` feature in **cosmwasm-std** dependency. |
 | **cosmwasm_2_0** | Enables `cosmwasm_1_4` in **MultiTest** and `cosmwasm_2_0` feature in **cosmwasm-std** dependency. |
+| **cosmwasm_2_1** | Enables `cosmwasm_2_0` in **MultiTest** and `cosmwasm_2_1` feature in **cosmwasm-std** dependency. |
 
 ## Conclusion
 
