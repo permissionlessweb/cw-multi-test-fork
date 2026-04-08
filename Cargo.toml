@@ -29,10 +29,10 @@ cosmwasm_3_0 = ["cosmwasm_2_2", "cosmwasm-std/cosmwasm_3_0"]
 
 [dependencies]
 bech32 = "0.11.0"
-cosmwasm-schema = { path = "../ZK/cw/zk-cosmwasm/packages/schema" }
-cosmwasm-std = { path = "../ZK/cw/zk-cosmwasm/packages/std" }
-cw-storage-plus = { path = "../ZK/cw/zk-storage-plus" }
-cw-utils = { path = "../ZK/cw/zk-cw-minus/packages/cw-utils" }
+cosmwasm-schema = { git = "https://github.com/permissionlessweb/cosmwasm", branch = "zk-mvp" }
+cosmwasm-std = { git = "https://github.com/permissionlessweb/cosmwasm", branch = "zk-mvp" }
+cw-storage-plus = { git = "https://github.com/permissionlessweb/cw-storage-plus", branch = "zk-mvp" }
+cw-utils = { git = "https://github.com/permissionlessweb/cw-minus", branch = "zk-mvp" }
 itertools = "0.14.0"
 prost = "0.14.1"
 schemars = "0.8"
@@ -45,10 +45,10 @@ log = "0.4.20"
 hex = "0.4.3"
 tiny-keccak = { version = "2.0.2", features = ["keccak"] }
  
-cw20-ics20 = { path = "../cw-plus/contracts/cw20-ics20" }
+cw20-ics20 = { git = "https://github.com/permissionlessweb/cw-plus", branch = "zk-mvp" }
 
 [dev-dependencies]
 hex = "0.4.3"
 hex-literal = "0.4.1"
 once_cell = "1.20.2"
-cw-multi-test = { package = "abstract-cw-multi-test", path = "." }
+cw-multi-test = { package = "abstract-cw-multi-test", git = "https://github.com/permissionlessweb/cw-multi-test-fork", branch = "zk-mvp" }
