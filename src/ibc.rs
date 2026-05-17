@@ -1,5 +1,11 @@
+//! Ibc Module adds IBC support to cw-multi-test
+#![allow(missing_docs)]
+use cosmwasm_std::{
+    Empty, IbcChannelCloseMsg, IbcChannelConnectMsg, IbcChannelOpenMsg, IbcMsg, IbcPacketAckMsg,
+    IbcPacketReceiveMsg, IbcPacketTimeoutMsg, IbcQuery,
+};
+
 use crate::{AcceptingModule, FailingModule, Module};
-use cosmwasm_std::{Empty, IbcMsg, IbcQuery};
 
 pub trait Ibc: Module<ExecT = IbcMsg, QueryT = IbcQuery, SudoT = Empty> {}
 

@@ -1,4 +1,5 @@
 //! # Error definitions
+pub use anyhow::{anyhow, Context as AnyContext, Error as AnyError, Result as AnyResult};
 
 use cosmwasm_std::{WasmMsg, WasmQuery};
 use thiserror::Error;

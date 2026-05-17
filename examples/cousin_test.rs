@@ -3,13 +3,14 @@ fn main() {
 }
 use std::path::Path;
 
-use clone_cw_multi_test::{
+use cosmwasm_std::{Addr, Empty, StdResult};
+use counter::msg::{ExecuteMsg, GetCountResponse, QueryMsg};
+use cw_multi_test::wasm_emulation::query::ContainsRemote;
+use cw_multi_test::{
     addons::{MockAddressGenerator, MockApiBech32},
     wasm_emulation::channel::RemoteChannel,
     App, AppBuilder, BankKeeper, ContractWrapper, Executor, WasmKeeper,
 };
-use cosmwasm_std::{Addr, Empty, StdResult};
-use counter::msg::{ExecuteMsg, GetCountResponse, QueryMsg};
 use cw_orch::daemon::networks::PHOENIX_1;
 use tokio::runtime::Runtime;
 
@@ -87,7 +88,7 @@ fn test() -> StdResult<()> {
         .with_bank(bank)
         .with_remote(remote_channel)
         .with_api(MockApiBech32::new(chain.network_info.pub_address_prefix))
-        .build(|_, _, _| {})?;
+        .build(|_, _, _| {});
 
     let sender = Addr::unchecked(SENDER);
     let rust_code_id = app.store_code(Box::new(rust_contract));

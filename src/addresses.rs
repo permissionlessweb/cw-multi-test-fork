@@ -40,7 +40,7 @@ pub trait AddressGenerator {
     ///
     /// ```
     /// # use cosmwasm_std::testing::{MockApi, MockStorage};
-    /// # use cw_multi_test::{AddressGenerator, SimpleAddressGenerator};
+    /// # use abstract_cw_multi_test::{AddressGenerator, SimpleAddressGenerator};
     /// # let api = MockApi::default();
     /// # let mut storage = MockStorage::default();
     /// struct MyAddressGenerator;
@@ -83,7 +83,7 @@ pub trait AddressGenerator {
     /// ```
     /// # use cosmwasm_std::Api;
     /// # use cosmwasm_std::testing::{MockApi, MockStorage};
-    /// # use cw_multi_test::{AddressGenerator, SimpleAddressGenerator};
+    /// # use abstract_cw_multi_test::{AddressGenerator, SimpleAddressGenerator};
     /// # let api = MockApi::default();
     /// # let mut storage = MockStorage::default();
     /// # let creator = api.addr_canonicalize("creator").unwrap();
@@ -105,6 +105,7 @@ pub trait AddressGenerator {
     /// let addr = my_address_generator.predictable_contract_address(&api, &mut storage, 200, 1, &[3], &creator, &[1]).unwrap();
     /// assert_eq!(addr.to_string(),"contract01");
     /// ```
+    #[allow(clippy::too_many_arguments)]
     fn predictable_contract_address(
         &self,
         _api: &dyn Api,

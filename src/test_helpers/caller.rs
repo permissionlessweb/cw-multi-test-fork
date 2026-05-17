@@ -1,8 +1,10 @@
 use crate::{Contract, ContractWrapper};
 use cosmwasm_std::{
-    Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError, SubMsg, WasmMsg,
+    Binary, CustomMsg, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError, StdResult,
+    SubMsg, WasmMsg,
 };
 use schemars::JsonSchema;
+use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
 fn instantiate(
@@ -25,7 +27,7 @@ fn execute(
     Ok(Response::new().add_submessage(message))
 }
 
-fn query(_deps: Deps, _env: Env, _msg: Empty) -> Result<Binary, StdError> {
+fn query(_deps: Deps, _env: Env, _msg: Empty) -> StdResult<Binary, StdError> {
     Err(StdError::msg(
         "query not implemented for the `caller` contract",
     ))
@@ -33,8 +35,8 @@ fn query(_deps: Deps, _env: Env, _msg: Empty) -> Result<Binary, StdError> {
 
 pub fn contract<C>() -> Box<dyn Contract<C>>
 where
-    C: Clone + Debug + PartialEq + JsonSchema + 'static,
+    C: Clone + Debug + PartialEq + JsonSchema + CustomMsg + DeserializeOwned + 'static,
 {
-    let contract = ContractWrapper::new(execute, instantiate, query);
+    let contract = ContractWrapper::new_with_empty(execute, instantiate, query);
     Box::new(contract)
 }

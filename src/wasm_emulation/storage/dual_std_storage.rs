@@ -1,5 +1,6 @@
 use crate::wasm_emulation::channel::RemoteChannel;
 
+use anyhow::Result;
 use cosmrs::proto::cosmos::base::query::v1beta1::PageRequest;
 use cosmrs::proto::cosmwasm::wasm::v1::Model;
 use cosmwasm_std::{Addr, Record, StdResult};
@@ -34,6 +35,7 @@ fn _gt(key1: Vec<u8>, key2: Vec<u8>) -> bool {
 
 use std::collections::HashSet;
 
+use anyhow::Result as AnyResult;
 const DISTANT_LIMIT: u64 = 5u64;
 
 struct DistantIter {

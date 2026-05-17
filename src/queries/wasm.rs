@@ -29,6 +29,8 @@ impl WasmRemoteQuerier {
             admin: code_info.admin.map(Addr::unchecked),
             code_id: code_info.code_id,
             creator: Addr::unchecked(code_info.creator),
+            label: "Distant contract with no label".to_string(),
+            created: 0,
         })
     }
 

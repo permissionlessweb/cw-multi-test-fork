@@ -1,13 +1,12 @@
 use crate::test_helpers::{stargate, stargate::ExecMsg};
-use crate::{App, AppBuilder, Executor, IbcAcceptingModule};
+use crate::{AppBuilder, Executor, IbcAcceptingModule};
 use cosmwasm_std::{Addr, Empty};
 
 #[test]
 fn default_ibc() {
     let mut app = AppBuilder::new()
         .with_ibc(IbcAcceptingModule::new())
-        .build(|_, _, _| ())
-        .unwrap();
+        .build(|_, _, _| ());
     let code = app.store_code(stargate::contract());
     let contract = app
         .instantiate_contract(
@@ -28,8 +27,7 @@ fn default_ibc() {
 fn substituting_ibc() {
     let mut app = AppBuilder::new()
         .with_ibc(IbcAcceptingModule::new())
-        .build(|_, _, _| ())
-        .unwrap();
+        .build(|_, _, _| ());
     let code = app.store_code(stargate::contract());
     let contract = app
         .instantiate_contract(

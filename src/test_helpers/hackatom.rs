@@ -2,11 +2,12 @@
 
 use crate::{Contract, ContractWrapper};
 use cosmwasm_std::{
-    to_json_binary, BankMsg, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdError,
+    to_json_binary, BankMsg, Binary, CustomMsg, Deps, DepsMut, Empty, Env, MessageInfo,
+    MigrateInfo, Response, StdError,
 };
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,11 +42,11 @@ fn instantiate(
 
 fn execute(deps: DepsMut, env: Env, _info: MessageInfo, _msg: Empty) -> Result<Response, StdError> {
     let init = HACKATOM.load(deps.storage)?;
-    let balance = deps.querier.query_all_balances(env.contract.address)?;
+    let balance = deps.querier.query_balance(env.contract.address, "btc")?;
 
     let resp = Response::new().add_message(BankMsg::Send {
         to_address: init.beneficiary,
-        amount: balance,
+        amount: vec![balance],
     });
 
     Ok(resp)
@@ -60,7 +61,12 @@ fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
     }
 }
 
-fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, StdError> {
+fn migrate(
+    deps: DepsMut,
+    _env: Env,
+    msg: MigrateMsg,
+    info: MigrateInfo,
+) -> Result<Response, StdError> {
     HACKATOM.update::<_, StdError>(deps.storage, |mut state| {
         state.beneficiary = msg.new_guy;
         Ok(state)
@@ -77,7 +83,7 @@ pub fn contract() -> Box<dyn Contract<Empty>> {
 #[allow(dead_code)]
 pub fn custom_contract<C>() -> Box<dyn Contract<C>>
 where
-    C: Clone + Debug + PartialEq + JsonSchema + 'static,
+    C: Clone + Debug + PartialEq + JsonSchema + CustomMsg + DeserializeOwned + 'static,
 {
     let contract =
         ContractWrapper::new_with_empty(execute, instantiate, query).with_migrate_empty(migrate);

@@ -3,10 +3,9 @@ use crate::wasm_emulation::query::gas::{
     GAS_COST_VALIDATOR,
 };
 use crate::wasm_emulation::query::mock_querier::QueryResultWithGas;
-use cosmwasm_std::Binary;
+use cosmwasm_std::{to_json_binary, Binary};
 use cosmwasm_vm::GasInfo;
 
-use cosmwasm_std::to_json_binary;
 use cosmwasm_std::{
     AllDelegationsResponse, AllValidatorsResponse, BondedDenomResponse, DelegationResponse,
     FullDelegation, StakingQuery, Validator, ValidatorResponse,
@@ -39,7 +38,11 @@ impl StakingQuerier {
             }
             StakingQuery::AllValidators {} => {
                 let res = &AllValidatorsResponse::new(
-                    self.validators.clone().into_iter().map(Into::into).collect(),
+                    self.validators
+                        .clone()
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
                 );
                 to_json_binary(&res).into()
             }

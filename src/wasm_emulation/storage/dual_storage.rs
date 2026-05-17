@@ -43,6 +43,7 @@ fn _gt(key1: Vec<u8>, key2: Vec<u8>) -> bool {
 
 use std::collections::HashSet;
 
+use anyhow::Result as AnyResult;
 const DISTANT_LIMIT: u64 = 5u64;
 
 #[derive(Default, Debug, Clone)]

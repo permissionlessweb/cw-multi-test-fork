@@ -5,6 +5,14 @@
 //! multi-contract deployments before testing them on a live blockchain.
 //!
 //! To understand the design of this module, please refer to `../DESIGN.md`
+#[cfg(test)]
+#[ctor::ctor]
+fn init_rustls() {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .ok();
+}
+
 
 pub mod addons;
 mod addresses;
@@ -18,20 +26,22 @@ pub mod custom_handler;
 pub mod error;
 mod executor;
 mod gov;
-mod ibc;
+pub mod ibc;
 mod module;
 pub(crate) mod prefixed_storage;
 pub mod queries;
 mod staking;
 mod stargate;
 mod test_helpers;
-pub(crate) mod tests;
+mod tests;
 mod transactions;
 mod wasm;
 pub mod wasm_emulation;
 
 pub use crate::addresses::{AddressGenerator, SimpleAddressGenerator};
-pub use crate::app::{custom_app, next_block, App, BasicApp, CosmosRouter, Router, SudoMsg};
+pub use crate::app::{
+    custom_app, next_block, no_init, App, BasicApp, CosmosRouter, Router, SudoMsg,
+};
 pub use crate::app_builder::{AppBuilder, BasicAppBuilder};
 pub use crate::bank::{Bank, BankKeeper, BankSudo};
 pub use crate::checksums::ChecksumGenerator;
@@ -44,8 +54,7 @@ pub use crate::staking::{
     Distribution, DistributionKeeper, StakeKeeper, Staking, StakingInfo, StakingSudo,
 };
 pub use crate::stargate::{Stargate, StargateAccepting, StargateFailing};
-pub use crate::wasm::{
-    ContractData, Wasm, WasmKeeper, WasmSudo, LOCAL_RUST_CODE_OFFSET, LOCAL_WASM_CODE_OFFSET,
-};
+pub use crate::wasm::{ContractData, Wasm, WasmKeeper, WasmSudo, LOCAL_CODE_OFFSET};
 
 pub use prefixed_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
+

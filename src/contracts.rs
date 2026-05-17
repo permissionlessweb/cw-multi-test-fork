@@ -1,84 +1,81 @@
-use std::{
-    error::Error,
-    fmt::{self, Debug, Display},
-};
+//! # Implementation of the contract trait and contract wrapper
 
-use schemars::JsonSchema;
+use crate::error::{std_error, std_error_bail, AnyError};
+use crate::wasm_emulation::query::mock_querier::ForkState;
+use crate::wasm_emulation::query::MockQuerier;
+use crate::wasm_emulation::storage::dual_std_storage::DualStorage;
+use crate::wasm_emulation::storage::storage_wrappers::{ReadonlyStorageWrapper, StorageWrapper};
 
 use cosmwasm_std::{
-    from_json, Binary, Checksum, CustomMsg, CustomQuery, Deps, DepsMut, Empty, Env, MessageInfo,
-    MigrateInfo, QuerierWrapper, Reply, Response, StdError, StdResult,
+    from_json, Binary, Checksum, CosmosMsg, CustomMsg, CustomQuery, Deps, DepsMut, Empty, Env,
+    MessageInfo, MigrateInfo, QuerierWrapper, Reply, Response, StdResult, SubMsg,
 };
-
 use serde::de::DeserializeOwned;
+use std::fmt::{Debug, Display};
+use std::ops::Deref;
 
-use crate::{
-    error::{std_error, std_error_bail},
-    wasm_emulation::{
-        query::{mock_querier::ForkState, MockQuerier},
-        storage::{
-            dual_std_storage::DualStorage,
-            storage_wrappers::{ReadonlyStorageWrapper, StorageWrapper},
-        },
-    },
-};
-
-/// Interface to call into a [Contract].
-pub trait Contract<T, Q = Empty>
+/// This trait serves as a primary interface for interacting with contracts.
+pub trait Contract<C, Q = Empty>
 where
-    T: CustomMsg + DeserializeOwned + Clone + std::fmt::Debug + PartialEq,
+    C: CustomMsg,
     Q: CustomQuery + DeserializeOwned,
 {
+    /// Evaluates contract's `execute` entry-point.
     fn execute(
         &self,
         deps: DepsMut<Q>,
         env: Env,
         info: MessageInfo,
         msg: Vec<u8>,
-        fork_state: ForkState<T, Q>,
-    ) -> StdResult<Response<T>>;
+        fork_state: ForkState<C, Q>,
+    ) -> StdResult<Response<C>>;
 
+    /// Evaluates contract's `instantiate` entry-point.
     fn instantiate(
         &self,
         deps: DepsMut<Q>,
         env: Env,
         info: MessageInfo,
         msg: Vec<u8>,
-        fork_state: ForkState<T, Q>,
-    ) -> StdResult<Response<T>>;
+        fork_state: ForkState<C, Q>,
+    ) -> StdResult<Response<C>>;
 
+    /// Evaluates contract's `query` entry-point.
     fn query(
         &self,
         deps: Deps<Q>,
         env: Env,
         msg: Vec<u8>,
-        fork_state: ForkState<T, Q>,
+        fork_state: ForkState<C, Q>,
     ) -> StdResult<Binary>;
 
+    /// Evaluates contract's `sudo` entry-point.
     fn sudo(
         &self,
         deps: DepsMut<Q>,
         env: Env,
         msg: Vec<u8>,
-        fork_state: ForkState<T, Q>,
-    ) -> StdResult<Response<T>>;
+        fork_state: ForkState<C, Q>,
+    ) -> StdResult<Response<C>>;
 
+    /// Evaluates contract's `reply` entry-point.
     fn reply(
         &self,
         deps: DepsMut<Q>,
         env: Env,
         msg: Reply,
-        fork_state: ForkState<T, Q>,
-    ) -> StdResult<Response<T>>;
+        fork_state: ForkState<C, Q>,
+    ) -> StdResult<Response<C>>;
 
+    /// Evaluates contract's `migrate` entry-point.
     fn migrate(
         &self,
         deps: DepsMut<Q>,
         env: Env,
         msg: Vec<u8>,
         info: MigrateInfo,
-        fork_state: ForkState<T, Q>,
-    ) -> StdResult<Response<T>>;
+        fork_state: ForkState<C, Q>,
+    ) -> StdResult<Response<C>>;
 
     /// Returns the provided checksum of the contract's Wasm blob.
     fn checksum(&self) -> Option<Checksum> {
@@ -86,20 +83,94 @@ where
     }
 }
 
-type ContractFn<T, C, E, Q> =
-    fn(deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: T) -> Result<Response<C>, E>;
-type PermissionedFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: T) -> Result<Response<C>, E>;
-type ReplyFn<C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: Reply) -> Result<Response<C>, E>;
-type QueryFn<T, E, Q> = fn(deps: Deps<Q>, env: Env, msg: T) -> Result<Binary, E>;
+#[rustfmt::skip]
+mod closures {
+    use super::*;
 
-type ContractClosure<T, C, E, Q> = fn(DepsMut<Q>, Env, MessageInfo, T) -> Result<Response<C>, E>;
-type PermissionedClosure<T, C, E, Q> = fn(DepsMut<Q>, Env, T) -> Result<Response<C>, E>;
-type ReplyClosure<C, E, Q> = fn(DepsMut<Q>, Env, Reply) -> Result<Response<C>, E>;
-type QueryClosure<T, E, Q> = fn(Deps<Q>, Env, T) -> Result<Binary, E>;
+    // function types
+    pub type ContractFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, info: MessageInfo, msg: T) -> Result<Response<C>, E>;
+    pub type PermissionedFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: T) -> Result<Response<C>, E>;
+    pub type MigrateFn<T, C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: T,info: MigrateInfo) -> Result<Response<C>, E>;
+    pub type ReplyFn<C, E, Q> = fn(deps: DepsMut<Q>, env: Env, msg: Reply) -> Result<Response<C>, E>;
+    pub type QueryFn<T, E, Q> = fn(deps: Deps<Q>, env: Env, msg: T) -> Result<Binary, E>;
 
-#[derive(Clone, Copy)]
-/// Wraps the exported functions from a contract and provides the normalized format
-/// Place T4 and E4 at the end, as we just want default placeholders for most contracts that don't have sudo
+    // closure types
+    pub type ContractClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, MessageInfo, T) -> Result<Response<C>, E>>;
+    pub type PermissionedClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, T) -> Result<Response<C>, E>>;
+    pub type MigrateClosure<T, C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, T,MigrateInfo) -> Result<Response<C>, E>>;
+    pub type ReplyClosure<C, E, Q> = Box<dyn Fn(DepsMut<Q>, Env, Reply) -> Result<Response<C>, E>>;
+    pub type QueryClosure<T, E, Q> = Box<dyn Fn(Deps<Q>, Env, T) -> Result<Binary, E>>;
+}
+
+use closures::*;
+
+/// This structure wraps the [Contract] trait implementor
+/// and provides generic access to the contract's entry-points.
+///
+/// List of generic types used in [ContractWrapper]:
+/// - **T1** type of message passed to [execute] entry-point.
+/// - **T2** type of message passed to [instantiate] entry-point.
+/// - **T3** type of message passed to [query] entry-point.
+/// - **T4** type of message passed to [sudo] entry-point.
+/// - instead of **~~T5~~**, always the `Reply` type is used in [reply] entry-point.
+/// - **T6** type of message passed to [migrate] entry-point.
+/// - **E1** type of error returned from [execute] entry-point.
+/// - **E2** type of error returned from [instantiate] entry-point.
+/// - **E3** type of error returned from [query] entry-point.
+/// - **E4** type of error returned from [sudo] entry-point.
+/// - **E5** type of error returned from [reply] entry-point.
+/// - **E6** type of error returned from [migrate] entry-point.
+/// - **C** type of custom message returned from all entry-points except [query].
+/// - **Q** type of custom query in `Querier` passed as 'Deps' or 'DepsMut' to all entry-points.
+///
+/// The following table summarizes the purpose of all generic types used in [ContractWrapper].
+/// ```text
+/// ┌─────────────┬────────────────┬─────────────────────┬─────────┬─────────┬───────┬───────┐
+/// │  Contract   │    Contract    │                     │         │         │       │       │
+/// │ entry-point │    wrapper     │    Closure type     │ Message │ Message │ Error │ Query │
+/// │             │    member      │                     │   IN    │   OUT   │  OUT  │       │
+/// ╞═════════════╪════════════════╪═════════════════════╪═════════╪═════════╪═══════╪═══════╡
+/// │     (1)     │                │                     │         │         │       │       │
+/// ╞═════════════╪════════════════╪═════════════════════╪═════════╪═════════╪═══════╪═══════╡
+/// │ execute     │ execute_fn     │ ContractClosure     │   T1    │    C    │  E1   │   Q   │
+/// ├─────────────┼────────────────┼─────────────────────┼─────────┼─────────┼───────┼───────┤
+/// │ instantiate │ instantiate_fn │ ContractClosure     │   T2    │    C    │  E2   │   Q   │
+/// ├─────────────┼────────────────┼─────────────────────┼─────────┼─────────┼───────┼───────┤
+/// │ query       │ query_fn       │ QueryClosure        │   T3    │ Binary  │  E3   │   Q   │
+/// ├─────────────┼────────────────┼─────────────────────┼─────────┼─────────┼───────┼───────┤
+/// │ sudo        │ sudo_fn        │ PermissionedClosure │   T4    │    C    │  E4   │   Q   │
+/// ├─────────────┼────────────────┼─────────────────────┼─────────┼─────────┼───────┼───────┤
+/// │ reply       │ reply_fn       │ ReplyClosure        │  Reply  │    C    │  E5   │   Q   │
+/// ├─────────────┼────────────────┼─────────────────────┼─────────┼─────────┼───────┼───────┤
+/// │ migrate     │ migrate_fn     │ PermissionedClosure │   T6    │    C    │  E6   │   Q   │
+/// └─────────────┴────────────────┴─────────────────────┴─────────┴─────────┴───────┴───────┘
+/// ```
+/// The general schema depicting which generic type is used in entry points is shown below.
+/// Entry point, when called, is provided minimum two arguments: custom query of type **Q**
+/// (inside `Deps` or `DepsMut`) and input message of type **T1**, **T2**, **T3**, **T4**,
+/// **Reply** or **T6**. As a result, entry point returns custom output message of type
+/// Response<**C**> or **Binary** and an error of type **E1**, **E2**, **E3**, **E4**, **E5**
+/// or **E6**.
+///
+/// ```text
+///    entry_point(query, .., message_in) -> Result<message_out, error>
+///                  ┬           ┬                      ┬          ┬
+///             Q >──┘           │                      │          └──> E1,E2,E3,E4,E5,E6
+///    T1,T2,T3,T4,Reply,T6 >────┘                      └─────────────> C,Binary
+/// ```
+/// Generic type **C** defines a custom message that is specific for the **whole blockchain**.
+/// Similarly, the generic type **Q** defines a custom query that is also specific
+/// to the **whole blockchain**. Other generic types are specific to the implemented contract.
+/// So all smart contracts used in the same blockchain will have the same types for **C** and **Q**,
+/// but each contract may use different type for other generic types.
+/// It means that e.g. **T1** in smart contract `A` may differ from **T1** in smart contract `B`.
+///
+/// [execute]: Contract::execute
+/// [instantiate]: Contract::instantiate
+/// [query]: Contract::query
+/// [sudo]: Contract::sudo
+/// [reply]: Contract::reply
+/// [migrate]: Contract::migrate
 pub struct ContractWrapper<
     T1,
     T2,
@@ -110,54 +181,73 @@ pub struct ContractWrapper<
     C = Empty,
     Q = Empty,
     T4 = Empty,
-    E4 = StdError,
-    E5 = StdError,
+    E4 = AnyError,
+    E5 = AnyError,
     T6 = Empty,
-    E6 = StdError,
+    E6 = AnyError,
 > where
-    T1: DeserializeOwned + Debug,
-    T2: DeserializeOwned,
-    T3: DeserializeOwned,
-    T4: DeserializeOwned,
-    T6: DeserializeOwned,
-    E1: Display + Debug + Send + Sync + 'static,
-    E2: Display + Debug + Send + Sync + 'static,
-    E3: Display + Debug + Send + Sync + 'static,
-    E4: Display + Debug + Send + Sync + 'static,
-    E5: Display + Debug + Send + Sync + 'static,
-    E6: Display + Debug + Send + Sync + 'static,
-    C: Clone + fmt::Debug + PartialEq,
-    Q: CustomQuery + DeserializeOwned + 'static,
+    T1: DeserializeOwned, // Type of message passed to `execute` entry-point.
+    T2: DeserializeOwned, // Type of message passed to `instantiate` entry-point.
+    T3: DeserializeOwned, // Type of message passed to `query` entry-point.
+    T4: DeserializeOwned, // Type of message passed to `sudo` entry-point.
+    T6: DeserializeOwned, // Type of message passed to `migrate` entry-point.
+    E1: Display + Debug + Send + Sync, // Type of error returned from `execute` entry-point.
+    E2: Display + Debug + Send + Sync, // Type of error returned from `instantiate` entry-point.
+    E3: Display + Debug + Send + Sync, // Type of error returned from `query` entry-point.
+    E4: Display + Debug + Send + Sync, // Type of error returned from `sudo` entry-point.
+    E5: Display + Debug + Send + Sync, // Type of error returned from `reply` entry-point.
+    E6: Display + Debug + Send + Sync, // Type of error returned from `migrate` entry-point.
+    C: CustomMsg,         // Type of custom message returned from all entry-points except `query`.
+    Q: CustomQuery + DeserializeOwned, // Type of custom query in querier passed as deps/deps_mut to all entry-points.
 {
     execute_fn: ContractClosure<T1, C, E1, Q>,
     instantiate_fn: ContractClosure<T2, C, E2, Q>,
-    pub query_fn: QueryClosure<T3, E3, Q>,
+    query_fn: QueryClosure<T3, E3, Q>,
     sudo_fn: Option<PermissionedClosure<T4, C, E4, Q>>,
     reply_fn: Option<ReplyClosure<C, E5, Q>>,
-    migrate_fn: Option<PermissionedClosure<T6, C, E6, Q>>,
+    migrate_fn: Option<MigrateClosure<T6, C, E6, Q>>,
     checksum: Option<Checksum>,
 }
 
 impl<T1, T2, T3, E1, E2, E3, C, Q> ContractWrapper<T1, T2, T3, E1, E2, E3, C, Q>
 where
-    T1: DeserializeOwned + Debug + 'static,
-    T2: DeserializeOwned + 'static,
-    T3: DeserializeOwned + 'static,
-    E1: Display + Debug + Send + Sync + 'static,
-    E2: Display + Debug + Send + Sync + 'static,
-    E3: Display + Debug + Send + Sync + 'static,
-    C: Clone + fmt::Debug + PartialEq + JsonSchema + 'static,
-    Q: CustomQuery + DeserializeOwned + 'static,
+    T1: DeserializeOwned + 'static, // Type of message passed to `execute` entry-point.
+    T2: DeserializeOwned + 'static, // Type of message passed to `instantiate` entry-point.
+    T3: DeserializeOwned + 'static, // Type of message passed to `query` entry-point.
+    E1: Display + Debug + Send + Sync + 'static, // Type of error returned from `execute` entry-point.
+    E2: Display + Debug + Send + Sync + 'static, // Type of error returned from `instantiate` entry-point.
+    E3: Display + Debug + Send + Sync + 'static, // Type of error returned from `query` entry-point.
+    C: CustomMsg + 'static, // Type of custom message returned from all entry-points except `query`.
+    Q: CustomQuery + DeserializeOwned + 'static, // Type of custom query in querier passed as deps/deps_mut to all entry-points.
 {
+    /// Creates a new contract wrapper with default settings.
     pub fn new(
         execute_fn: ContractFn<T1, C, E1, Q>,
         instantiate_fn: ContractFn<T2, C, E2, Q>,
         query_fn: QueryFn<T3, E3, Q>,
     ) -> Self {
         Self {
-            execute_fn,
-            instantiate_fn,
-            query_fn,
+            execute_fn: Box::new(execute_fn),
+            instantiate_fn: Box::new(instantiate_fn),
+            query_fn: Box::new(query_fn),
+            sudo_fn: None,
+            reply_fn: None,
+            migrate_fn: None,
+            checksum: None,
+        }
+    }
+
+    /// This will take a contract that returns `Response<Empty>` and will _upgrade_ it
+    /// to `Response<C>` if needed, to be compatible with a chain-specific extension.
+    pub fn new_with_empty(
+        execute_fn: ContractFn<T1, Empty, E1, Empty>,
+        instantiate_fn: ContractFn<T2, Empty, E2, Empty>,
+        query_fn: QueryFn<T3, E3, Empty>,
+    ) -> Self {
+        Self {
+            execute_fn: customize_contract_fn(execute_fn),
+            instantiate_fn: customize_contract_fn(instantiate_fn),
+            query_fn: customize_query_fn(query_fn),
             sudo_fn: None,
             reply_fn: None,
             migrate_fn: None,
@@ -166,23 +256,25 @@ where
     }
 }
 
+#[allow(clippy::type_complexity)]
 impl<T1, T2, T3, E1, E2, E3, C, Q, T4, E4, E5, T6, E6>
     ContractWrapper<T1, T2, T3, E1, E2, E3, C, Q, T4, E4, E5, T6, E6>
 where
-    T1: DeserializeOwned + Debug + 'static,
-    T2: DeserializeOwned + 'static,
-    T3: DeserializeOwned + 'static,
-    T4: DeserializeOwned + 'static,
-    T6: DeserializeOwned + 'static,
-    E1: Display + Debug + Send + Sync + 'static,
-    E2: Display + Debug + Send + Sync + 'static,
-    E3: Display + Debug + Send + Sync + 'static,
-    E4: Display + Debug + Send + Sync + 'static,
-    E5: Display + Debug + Send + Sync + 'static,
-    E6: Display + Debug + Send + Sync + 'static,
-    C: Clone + fmt::Debug + PartialEq + JsonSchema + 'static,
-    Q: CustomQuery + DeserializeOwned + 'static,
+    T1: DeserializeOwned, // Type of message passed to `execute` entry-point.
+    T2: DeserializeOwned, // Type of message passed to `instantiate` entry-point.
+    T3: DeserializeOwned, // Type of message passed to `query` entry-point.
+    T4: DeserializeOwned, // Type of message passed to `sudo` entry-point.
+    T6: DeserializeOwned, // Type of message passed to `migrate` entry-point.
+    E1: Display + Debug + Send + Sync, // Type of error returned from `execute` entry-point.
+    E2: Display + Debug + Send + Sync, // Type of error returned from `instantiate` entry-point.
+    E3: Display + Debug + Send + Sync, // Type of error returned from `query` entry-point.
+    E4: Display + Debug + Send + Sync, // Type of error returned from `sudo` entry-point.
+    E5: Display + Debug + Send + Sync, // Type of error returned from `reply` entry-point.
+    E6: Display + Debug + Send + Sync, // Type of error returned from `migrate` entry-point.
+    C: CustomMsg + 'static, // Type of custom message returned from all entry-points except `query`.
+    Q: CustomQuery + DeserializeOwned + 'static, // Type of custom query in querier passed as deps/deps_mut to all entry-points.
 {
+    /// Populates [ContractWrapper] with contract's `sudo` entry-point and custom message type.
     pub fn with_sudo<T4A, E4A>(
         self,
         sudo_fn: PermissionedFn<T4A, C, E4A, Q>,
@@ -195,13 +287,34 @@ where
             execute_fn: self.execute_fn,
             instantiate_fn: self.instantiate_fn,
             query_fn: self.query_fn,
-            sudo_fn: Some(sudo_fn),
+            sudo_fn: Some(Box::new(sudo_fn)),
             reply_fn: self.reply_fn,
             migrate_fn: self.migrate_fn,
             checksum: None,
         }
     }
 
+    /// Populates [ContractWrapper] with contract's `sudo` entry-point and `Empty` as a custom message.
+    pub fn with_sudo_empty<T4A, E4A>(
+        self,
+        sudo_fn: PermissionedFn<T4A, Empty, E4A, Empty>,
+    ) -> ContractWrapper<T1, T2, T3, E1, E2, E3, C, Q, T4A, E4A, E5, T6, E6>
+    where
+        T4A: DeserializeOwned + 'static,
+        E4A: Display + Debug + Send + Sync + 'static,
+    {
+        ContractWrapper {
+            execute_fn: self.execute_fn,
+            instantiate_fn: self.instantiate_fn,
+            query_fn: self.query_fn,
+            sudo_fn: Some(customize_permissioned_fn(sudo_fn)),
+            reply_fn: self.reply_fn,
+            migrate_fn: self.migrate_fn,
+            checksum: None,
+        }
+    }
+
+    /// Populates [ContractWrapper] with contract's `reply` entry-point and custom message type.
     pub fn with_reply<E5A>(
         self,
         reply_fn: ReplyFn<C, E5A, Q>,
@@ -214,15 +327,35 @@ where
             instantiate_fn: self.instantiate_fn,
             query_fn: self.query_fn,
             sudo_fn: self.sudo_fn,
-            reply_fn: Some(reply_fn),
+            reply_fn: Some(Box::new(reply_fn)),
             migrate_fn: self.migrate_fn,
             checksum: None,
         }
     }
 
+    /// Populates [ContractWrapper] with contract's `reply` entry-point and `Empty` as a custom message.
+    pub fn with_reply_empty<E5A>(
+        self,
+        reply_fn: ReplyFn<Empty, E5A, Empty>,
+    ) -> ContractWrapper<T1, T2, T3, E1, E2, E3, C, Q, T4, E4, E5A, T6, E6>
+    where
+        E5A: Display + Debug + Send + Sync + 'static,
+    {
+        ContractWrapper {
+            execute_fn: self.execute_fn,
+            instantiate_fn: self.instantiate_fn,
+            query_fn: self.query_fn,
+            sudo_fn: self.sudo_fn,
+            reply_fn: Some(customize_permissioned_fn(reply_fn)),
+            migrate_fn: self.migrate_fn,
+            checksum: None,
+        }
+    }
+
+    /// Populates [ContractWrapper] with contract's `migrate` entry-point and custom message type.
     pub fn with_migrate<T6A, E6A>(
         self,
-        migrate_fn: PermissionedFn<T6A, C, E6A, Q>,
+        migrate_fn: MigrateFn<T6A, C, E6A, Q>,
     ) -> ContractWrapper<T1, T2, T3, E1, E2, E3, C, Q, T4, E4, E5, T6A, E6A>
     where
         T6A: DeserializeOwned + 'static,
@@ -234,10 +367,31 @@ where
             query_fn: self.query_fn,
             sudo_fn: self.sudo_fn,
             reply_fn: self.reply_fn,
-            migrate_fn: Some(migrate_fn),
+            migrate_fn: Some(Box::new(migrate_fn)),
             checksum: None,
         }
     }
+
+    /// Populates [ContractWrapper] with contract's `migrate` entry-point and `Empty` as a custom message.
+    pub fn with_migrate_empty<T6A, E6A>(
+        self,
+        migrate_fn: MigrateFn<T6A, Empty, E6A, Empty>,
+    ) -> ContractWrapper<T1, T2, T3, E1, E2, E3, C, Q, T4, E4, E5, T6A, E6A>
+    where
+        T6A: DeserializeOwned + 'static,
+        E6A: Display + Debug + Send + Sync + 'static,
+    {
+        ContractWrapper {
+            execute_fn: self.execute_fn,
+            instantiate_fn: self.instantiate_fn,
+            query_fn: self.query_fn,
+            sudo_fn: self.sudo_fn,
+            reply_fn: self.reply_fn,
+            migrate_fn: Some(customize_migrate_fn(migrate_fn)),
+            checksum: None,
+        }
+    }
+
     /// Populates [ContractWrapper] with the provided checksum of the contract's Wasm blob.
     pub fn with_checksum(mut self, checksum: Checksum) -> Self {
         self.checksum = Some(checksum);
@@ -245,23 +399,159 @@ where
     }
 }
 
+fn customize_contract_fn<T, C, E, Q>(
+    raw_fn: ContractFn<T, Empty, E, Empty>,
+) -> ContractClosure<T, C, E, Q>
+where
+    T: DeserializeOwned + 'static,
+    E: Display + Debug + Send + Sync + 'static,
+    C: CustomMsg,
+    Q: CustomQuery + DeserializeOwned,
+{
+    Box::new(
+        move |mut deps: DepsMut<Q>,
+              env: Env,
+              info: MessageInfo,
+              msg: T|
+              -> Result<Response<C>, E> {
+            let deps = decustomize_deps_mut(&mut deps);
+            raw_fn(deps, env, info, msg).map(customize_response::<C>)
+        },
+    )
+}
+
+fn customize_query_fn<T, E, Q>(raw_fn: QueryFn<T, E, Empty>) -> QueryClosure<T, E, Q>
+where
+    T: DeserializeOwned + 'static,
+    E: Display + Debug + Send + Sync + 'static,
+    Q: CustomQuery + DeserializeOwned,
+{
+    Box::new(
+        move |deps: Deps<Q>, env: Env, msg: T| -> Result<Binary, E> {
+            let deps = decustomize_deps(&deps);
+            raw_fn(deps, env, msg)
+        },
+    )
+}
+
+fn customize_migrate_fn<T, C, E, Q>(
+    raw_fn: MigrateFn<T, Empty, E, Empty>,
+) -> MigrateClosure<T, C, E, Q>
+where
+    T: DeserializeOwned + 'static,
+    E: Display + Debug + Send + Sync + 'static,
+    C: CustomMsg,
+    Q: CustomQuery + DeserializeOwned,
+{
+    Box::new(
+        move |mut deps: DepsMut<Q>,
+              env: Env,
+              msg: T,
+              info: MigrateInfo|
+              -> Result<Response<C>, E> {
+            let deps = decustomize_deps_mut(&mut deps);
+            raw_fn(deps, env, msg, info).map(customize_response::<C>)
+        },
+    )
+}
+
+fn customize_permissioned_fn<T, C, E, Q>(
+    raw_fn: PermissionedFn<T, Empty, E, Empty>,
+) -> PermissionedClosure<T, C, E, Q>
+where
+    T: DeserializeOwned + 'static,
+    E: Display + Debug + Send + Sync + 'static,
+    C: CustomMsg,
+    Q: CustomQuery + DeserializeOwned,
+{
+    Box::new(
+        move |mut deps: DepsMut<Q>, env: Env, msg: T| -> Result<Response<C>, E> {
+            let deps = decustomize_deps_mut(&mut deps);
+            raw_fn(deps, env, msg).map(customize_response::<C>)
+        },
+    )
+}
+
+fn decustomize_deps_mut<'a, Q>(deps: &'a mut DepsMut<Q>) -> DepsMut<'a, Empty>
+where
+    Q: CustomQuery + DeserializeOwned,
+{
+    DepsMut {
+        storage: deps.storage,
+        api: deps.api,
+        querier: QuerierWrapper::new(deps.querier.deref()),
+    }
+}
+
+fn decustomize_deps<'a, Q>(deps: &'a Deps<'a, Q>) -> Deps<'a, Empty>
+where
+    Q: CustomQuery + DeserializeOwned,
+{
+    Deps {
+        storage: deps.storage,
+        api: deps.api,
+        querier: QuerierWrapper::new(deps.querier.deref()),
+    }
+}
+
+fn customize_response<C>(resp: Response<Empty>) -> Response<C>
+where
+    C: CustomMsg,
+{
+    let mut customized_resp = Response::<C>::new()
+        .add_submessages(resp.messages.into_iter().map(customize_msg::<C>))
+        .add_events(resp.events)
+        .add_attributes(resp.attributes);
+    customized_resp.data = resp.data;
+    customized_resp
+}
+
+fn customize_msg<C>(msg: SubMsg<Empty>) -> SubMsg<C>
+where
+    C: CustomMsg,
+{
+    SubMsg {
+        id: msg.id,
+        payload: msg.payload,
+        msg: match msg.msg {
+            CosmosMsg::Wasm(wasm) => CosmosMsg::Wasm(wasm),
+            CosmosMsg::Bank(bank) => CosmosMsg::Bank(bank),
+            #[cfg(feature = "staking")]
+            CosmosMsg::Staking(staking) => CosmosMsg::Staking(staking),
+            #[cfg(feature = "staking")]
+            CosmosMsg::Distribution(distribution) => CosmosMsg::Distribution(distribution),
+            CosmosMsg::Custom(_) => unreachable!(),
+            #[cfg(feature = "stargate")]
+            CosmosMsg::Ibc(ibc) => CosmosMsg::Ibc(ibc),
+            #[cfg(feature = "cosmwasm_2_0")]
+            CosmosMsg::Any(any) => CosmosMsg::Any(any),
+            other => panic!("unknown message variant {:?}", other),
+        },
+        gas_limit: msg.gas_limit,
+        reply_on: msg.reply_on,
+    }
+}
+
 impl<T1, T2, T3, E1, E2, E3, C, T4, E4, E5, T6, E6, Q> Contract<C, Q>
     for ContractWrapper<T1, T2, T3, E1, E2, E3, C, Q, T4, E4, E5, T6, E6>
 where
-    T1: DeserializeOwned + Debug + Clone,
-    T2: DeserializeOwned + Debug + Clone,
-    T3: DeserializeOwned + Debug + Clone,
-    T4: DeserializeOwned,
-    T6: DeserializeOwned,
-    E1: Display + Debug + Send + Sync + Error + 'static,
-    E2: Display + Debug + Send + Sync + Error + 'static,
-    E3: Display + Debug + Send + Sync + Error + 'static,
-    E4: Display + Debug + Send + Sync + 'static,
-    E5: Display + Debug + Send + Sync + 'static,
-    E6: Display + Debug + Send + Sync + 'static,
-    C: CustomMsg + DeserializeOwned + Clone + fmt::Debug + PartialEq + JsonSchema,
-    Q: CustomQuery + DeserializeOwned,
+    T1: DeserializeOwned, // Type of message passed to `execute` entry-point.
+    T2: DeserializeOwned, // Type of message passed to `instantiate` entry-point.
+    T3: DeserializeOwned, // Type of message passed to `query` entry-point.
+    T4: DeserializeOwned, // Type of message passed to `sudo` entry-point.
+    T6: DeserializeOwned, // Type of message passed to `migrate` entry-point.
+    E1: Display + Debug + Send + Sync + 'static, // Type of error returned from `execute` entry-point.
+    E2: Display + Debug + Send + Sync + 'static, // Type of error returned from `instantiate` entry-point.
+    E3: Display + Debug + Send + Sync + 'static, // Type of error returned from `query` entry-point.
+    E4: Display + Debug + Send + Sync + 'static, // Type of error returned from `sudo` entry-point.
+    E5: Display + Debug + Send + Sync + 'static, // Type of error returned from `reply` entry-point.
+    E6: Display + Debug + Send + Sync + 'static, // Type of error returned from `migrate` entry-point.
+    C: CustomMsg + DeserializeOwned, // Type of custom message returned from all entry-points except `query`.
+    Q: CustomQuery + DeserializeOwned, // Type of custom query in querier passed as deps/deps_mut to all entry-points.
 {
+    /// Calls [execute] on wrapped [Contract] trait implementor.
+    ///
+    /// [execute]: Contract::execute
     fn execute(
         &self,
         deps: DepsMut<Q>,
@@ -283,9 +573,12 @@ where
         };
 
         let msg: T1 = from_json(msg)?;
-        (self.execute_fn)(deps, env, info, msg).map_err(|err| std_error!(err))
+        (self.execute_fn)(deps, env, info, msg).map_err(|err: E1| std_error!(err))
     }
 
+    /// Calls [instantiate] on wrapped [Contract] trait implementor.
+    ///
+    /// [instantiate]: Contract::instantiate
     fn instantiate(
         &self,
         deps: DepsMut<Q>,
@@ -306,9 +599,12 @@ where
             querier: QuerierWrapper::new(&querier),
         };
         let msg: T2 = from_json(msg)?;
-        (self.instantiate_fn)(deps, env, info, msg).map_err(|err| std_error!(err))
+        (self.instantiate_fn)(deps, env, info, msg).map_err(|err: E2| std_error!(err))
     }
 
+    /// Calls [query] on wrapped [Contract] trait implementor.
+    ///
+    /// [query]: Contract::query
     fn query(
         &self,
         deps: Deps<Q>,
@@ -328,10 +624,13 @@ where
             querier: QuerierWrapper::new(&querier),
         };
         let msg: T3 = from_json(msg)?;
-        (self.query_fn)(deps, env, msg).map_err(|err| std_error!(err))
+        (self.query_fn)(deps, env, msg).map_err(|err: E3| std_error!(err))
     }
 
-    // this returns an error if the contract doesn't implement sudo
+    /// Calls [sudo] on wrapped [Contract] trait implementor.
+    /// Returns an error when the contract does not implement [sudo].
+    ///
+    /// [sudo]: Contract::sudo
     fn sudo(
         &self,
         deps: DepsMut<Q>,
@@ -352,12 +651,15 @@ where
         };
         let msg = from_json(msg)?;
         match &self.sudo_fn {
-            Some(sudo) => sudo(deps, env, msg).map_err(|err| std_error!(err)),
-            None => std_error_bail!("sudo not implemented for contract"),
+            Some(sudo) => sudo(deps, env, msg).map_err(|err: E4| std_error!(err)),
+            None => std_error_bail!("sudo is not implemented for contract"),
         }
     }
 
-    // this returns an error if the contract doesn't implement reply
+    /// Calls [reply] on wrapped [Contract] trait implementor.
+    /// Returns an error when the contract does not implement [reply].
+    ///
+    /// [reply]: Contract::reply
     fn reply(
         &self,
         deps: DepsMut<Q>,
@@ -365,6 +667,7 @@ where
         reply_data: Reply,
         fork_state: ForkState<C, Q>,
     ) -> StdResult<Response<C>> {
+        let msg: Reply = reply_data;
         let querier = MockQuerier::new(fork_state.clone());
         let mut storage = DualStorage::new(
             fork_state.remote,
@@ -377,18 +680,21 @@ where
             querier: QuerierWrapper::new(&querier),
         };
         match &self.reply_fn {
-            Some(reply) => reply(deps, env, reply_data).map_err(|err| std_error!(err)),
-            None => std_error_bail!("reply not implemented for contract"),
+            Some(reply) => reply(deps, env, msg).map_err(|err: E5| std_error!(err)),
+            None => std_error_bail!("reply is not implemented for contract"),
         }
     }
 
-    // this returns an error if the contract doesn't implement migrate
+    /// Calls [migrate] on wrapped [Contract] trait implementor.
+    /// Returns an error when the contract does not implement [migrate].
+    ///
+    /// [migrate]: Contract::migrate
     fn migrate(
         &self,
         deps: DepsMut<Q>,
         env: Env,
         msg: Vec<u8>,
-        _info: MigrateInfo,
+        info: MigrateInfo,
         fork_state: ForkState<C, Q>,
     ) -> StdResult<Response<C>> {
         let querier = MockQuerier::new(fork_state.clone());
@@ -404,65 +710,13 @@ where
         };
         let msg = from_json(msg)?;
         match &self.migrate_fn {
-            Some(migrate) => migrate(deps, env, msg).map_err(|err| std_error!(err)),
-            None => std_error_bail!("migrate not implemented for contract"),
+            Some(migrate) => migrate(deps, env, msg, info).map_err(|err: E6| std_error!(err)),
+            None => std_error_bail!("migrate is not implemented for contract"),
         }
     }
 
     /// Returns the provided checksum of the contract's Wasm blob.
     fn checksum(&self) -> Option<Checksum> {
         self.checksum
-    }
-}
-
-#[cfg(test)]
-pub mod test {
-
-    use cosmwasm_std::{
-        testing::{message_info, mock_dependencies, mock_env},
-        to_json_binary, Addr, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult,
-    };
-
-    use super::ContractWrapper;
-
-    fn execute(_deps: DepsMut, _env: Env, _info: MessageInfo, _msg: Empty) -> StdResult<Response> {
-        Ok(Response::new())
-    }
-
-    fn query(_deps: Deps, _env: Env, _msg: Empty) -> StdResult<Binary> {
-        to_json_binary("resp")
-    }
-
-    fn instantiate(
-        _deps: DepsMut,
-        _env: Env,
-        _info: MessageInfo,
-        _msg: Empty,
-    ) -> StdResult<Response> {
-        Ok(Response::new())
-    }
-
-    #[test]
-    fn mock_contract() -> StdResult<()> {
-        let contract = ContractWrapper::new(execute, instantiate, query);
-
-        let clone = contract.execute_fn;
-        let second_clone = clone;
-
-        clone(
-            mock_dependencies().as_mut(),
-            mock_env(),
-            message_info(&Addr::unchecked("sender"), &[]),
-            Empty {},
-        )?;
-
-        second_clone(
-            mock_dependencies().as_mut(),
-            mock_env(),
-            message_info(&Addr::unchecked("sender"), &[]),
-            Empty {},
-        )?;
-
-        Ok(())
     }
 }

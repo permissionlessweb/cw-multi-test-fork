@@ -1,8 +1,7 @@
 use crate::app::CosmosRouter;
 use crate::error::std_error_bail;
 use crate::AppResponse;
-use cosmwasm_std::{Addr, Api, Binary, BlockInfo, CustomQuery, Querier, StdResult, Storage};
-use schemars::JsonSchema;
+use cosmwasm_std::{Addr, Api, Binary, BlockInfo, CustomMsg, CustomQuery, Querier, StdResult, Storage};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -27,7 +26,7 @@ pub trait Module {
     where
         ExecC: Debug + Clone + PartialEq + DeserializeOwned + 'static,
         QueryC: CustomQuery + DeserializeOwned + 'static;
-
+        
     /// Runs any [QueryT](Self::QueryT) message,
     /// which can be called by any external actor or smart contract.
     fn query(

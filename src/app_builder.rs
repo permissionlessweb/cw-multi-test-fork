@@ -1,13 +1,14 @@
 //! Implementation of the builder for [App].
 
-use crate::error::std_error;
 use crate::wasm_emulation::channel::RemoteChannel;
+use crate::wasm_emulation::query::ContainsRemote;
 use crate::{
     App, Bank, BankKeeper, Distribution, DistributionKeeper, FailingModule, Gov, GovFailingModule,
-    Ibc, IbcFailingModule, Module, Router, StakeKeeper, Staking, Wasm, WasmKeeper,
+    Ibc, IbcAcceptingModule, IbcFailingModule, Module, Router, StakeKeeper, Staking, Wasm,
+    WasmKeeper,
 };
 use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
-use cosmwasm_std::{Api, BlockInfo, CustomMsg, CustomQuery,StdResult, Empty, Storage};
+use cosmwasm_std::{Api, BlockInfo, CustomMsg, CustomQuery, Empty, Storage};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
@@ -34,7 +35,7 @@ pub type BasicAppBuilder<ExecC, QueryC> = AppBuilder<
     WasmKeeper<ExecC, QueryC>,
     StakeKeeper,
     DistributionKeeper,
-    IbcFailingModule,
+    IbcAcceptingModule,
     GovFailingModule,
 >;
 
@@ -138,7 +139,7 @@ where
     }
 }
 
-impl<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
+impl<BankT: ContainsRemote, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
     AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
 where
     CustomT: Module,
@@ -152,7 +153,7 @@ where
     /// done on final building.
     pub fn with_wasm<NewWasm: Wasm<CustomT::ExecT, CustomT::QueryT>>(
         self,
-        wasm: NewWasm,
+        mut wasm: NewWasm,
     ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, NewWasm, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             bank,
@@ -167,7 +168,9 @@ where
             remote,
             ..
         } = self;
-
+        if let Some(remote) = remote.as_ref() {
+            wasm.set_remote(remote.clone());
+        }
         AppBuilder {
             api,
             block,
@@ -186,7 +189,7 @@ where
     /// Overwrites the default bank interface.
     pub fn with_bank<NewBank: Bank>(
         self,
-        bank: NewBank,
+        mut bank: NewBank,
     ) -> AppBuilder<NewBank, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> {
         let AppBuilder {
             wasm,
@@ -201,7 +204,9 @@ where
             remote,
             ..
         } = self;
-
+        if let Some(remote) = remote.as_ref() {
+            bank.set_remote(remote.clone());
+        }
         AppBuilder {
             api,
             block,
@@ -468,36 +473,13 @@ where
 
     /// Sets the chain of the app
     pub fn with_remote(
-        self,
+        mut self,
         remote: RemoteChannel,
     ) -> AppBuilder<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> {
-        let AppBuilder {
-            wasm,
-            api,
-            storage,
-            custom,
-            block,
-            staking,
-            bank,
-            distribution,
-            ibc,
-            gov,
-            ..
-        } = self;
-
-        AppBuilder {
-            api,
-            block,
-            storage,
-            bank,
-            wasm,
-            custom,
-            staking,
-            distribution,
-            ibc,
-            remote: Some(remote),
-            gov,
-        }
+        self.remote = Some(remote.clone());
+        self.wasm.set_remote(remote.clone());
+        self.bank.set_remote(remote.clone());
+        self
     }
 
     /// Overwrites the initial block.
@@ -507,13 +489,13 @@ where
     }
 
     #[allow(clippy::type_complexity)]
-    /// Builds final `App`. At this point all components type have to be properly related to each
-    /// other. If there are some generics related compilation errors, make sure that all components
-    /// are properly relating to each other.
+    /// Builds the final [App] with initialization.
+    ///
+    /// At this point all component types have to be properly related to each other.
     pub fn build<F>(
         self,
         init_fn: F,
-    ) -> StdResult<App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>>
+    ) -> App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
     where
         BankT: Bank,
         ApiT: Api,
@@ -524,32 +506,33 @@ where
         DistrT: Distribution,
         IbcT: Ibc,
         GovT: Gov,
+        // StargateT: Stargate,
         F: FnOnce(
             &mut Router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>,
-            &dyn Api,
+            &ApiT,
             &mut dyn Storage,
         ),
     {
-        let router = Router {
-            wasm: self.wasm,
-            bank: self.bank,
-            custom: self.custom,
-            staking: self.staking,
-            distribution: self.distribution,
-            ibc: self.ibc,
-            gov: self.gov,
-        };
-
+        // build the final application
         let mut app = App {
-            router,
+            router: Router {
+                wasm: self.wasm,
+                bank: self.bank,
+                custom: self.custom,
+                staking: self.staking,
+                distribution: self.distribution,
+                ibc: self.ibc,
+                gov: self.gov,
+                // stargate: self.stargate,
+            },
             api: self.api,
             block: self.block,
             storage: self.storage,
-            remote: self.remote.ok_or(std_error!(
-                "Remote has to be defined to use clone-testing"
-            ))?,
+            remote: self.remote,
         };
+        // execute initialization provided by the caller
         app.init_modules(init_fn);
-        Ok(app)
+        // return already initialized application
+        app
     }
 }

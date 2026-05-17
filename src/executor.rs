@@ -3,7 +3,6 @@ use cosmwasm_std::{
     SubMsgResponse, WasmMsg,
 };
 use cw_utils::{parse_execute_response_data, parse_instantiate_response_data};
-use schemars::JsonSchema;
 use serde::Serialize;
 use std::fmt::Debug;
 

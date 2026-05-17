@@ -1,7 +1,7 @@
 use crate::wasm_emulation::channel::RemoteChannel;
 use crate::wasm_emulation::query::gas::{GAS_COST_ALL_BALANCE_QUERY, GAS_COST_BALANCE_QUERY};
 use crate::wasm_emulation::query::mock_querier::QueryResultWithGas;
-use cosmwasm_std::{Addr, Uint256};
+use cosmwasm_std::{to_json_binary, Addr, Uint256};
 use cosmwasm_vm::GasInfo;
 
 use cw_utils::NativeBalance;
@@ -11,11 +11,8 @@ use cw_orch::daemon::queriers::Bank;
 use cosmwasm_std::Binary;
 use cosmwasm_std::Coin;
 use std::collections::HashMap;
-
-use cosmwasm_std::Uint128;
 use cosmwasm_std::{BalanceResponse, BankQuery};
 
-use cosmwasm_std::to_json_binary;
 use cosmwasm_std::{ContractResult, SystemResult};
 
 #[derive(Clone)]

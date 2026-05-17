@@ -58,7 +58,10 @@ impl StorageAnalyzer {
     {
         Ok(Self {
             storage: app.get_querier_storage()?,
-            remote: app.remote.clone(),
+            remote: app
+                .remote
+                .clone()
+                .expect("Remote has to be defined to use storage analyzer"),
         })
     }
 

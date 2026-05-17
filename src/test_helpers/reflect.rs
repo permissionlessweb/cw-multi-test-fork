@@ -1,10 +1,11 @@
 use crate::test_helpers::{payout, CustomMsg, COUNT};
 use crate::{Contract, ContractWrapper};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     to_json_binary, Binary, Deps, DepsMut, Empty, Env, Event, MessageInfo, Reply, Response,
     StdError, SubMsg,
 };
-use cw_storage_plus::Map;
+use cw_storage_plus::{Item, Map};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -18,9 +19,15 @@ pub enum QueryMsg {
     Reply { id: u64 },
 }
 
+#[cw_serde]
+pub struct ReflectResponse {
+    pub count: u32,
+}
+
+const COUNTER: Item<u32> = Item::new("counter");
 const REFLECT: Map<u64, Reply> = Map::new("reflect");
 
-fn instantiate(
+fn instantiate<C>(
     deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
@@ -30,7 +37,7 @@ fn instantiate(
     Ok(Response::default())
 }
 
-fn execute(
+fn execute<C>(
     deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
@@ -65,6 +72,7 @@ fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response<CustomMsg>, St
 }
 
 pub fn contract() -> Box<dyn Contract<CustomMsg>> {
-    let contract = ContractWrapper::new(execute, instantiate, query).with_reply(reply);
+    let contract = ContractWrapper::new(execute::<CustomMsg>, instantiate::<CustomMsg>, query)
+        .with_reply(reply);
     Box::new(contract)
 }

@@ -32,7 +32,7 @@ use super::gas::GAS_COST_QUERY_ERROR;
 
 #[derive(Clone)]
 pub struct LocalForkedState<ExecC, QueryC> {
-    pub contracts: HashMap<usize, *mut dyn Contract<ExecC, QueryC>>,
+    pub contracts: HashMap<u64, *mut dyn Contract<ExecC, QueryC>>,
     pub env: Env,
 }
 
@@ -198,6 +198,7 @@ impl<
                 }),
                 GasInfo::with_externally_used(GAS_COST_QUERY_ERROR),
             ),
+            #[cfg(feature = "cosmwasm_2_0")]
             QueryRequest::Grpc(_req) => (
                 SystemResult::Err(SystemError::UnsupportedRequest {
                     kind: "Stargate".to_string(),

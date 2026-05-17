@@ -1,14 +1,16 @@
 use cosmwasm_std::Storage;
 use cosmwasm_std::{Order, Record};
-use length_prefixed::to_length_prefixed_nested;
+pub use length_prefixed::{to_length_prefixed, to_length_prefixed_nested};
 use namespace_helpers::{get_with_prefix, range_with_prefix, remove_with_prefix, set_with_prefix};
-
 mod length_prefixed;
 mod namespace_helpers;
+pub mod typed_prefixed_storage;
+
+#[cfg(feature = "iterator")]
+use cosmwasm_std::{Order, Record};
 
 pub use length_prefixed::{
-    contract_namespace, decode_length, get_full_contract_storage_namespace, to_length_prefixed,
-    CONTRACT_STORAGE_PREFIX,
+    contract_namespace, decode_length, get_full_contract_storage_namespace, CONTRACT_STORAGE_PREFIX,
 };
 
 /// An alias of PrefixedStorage::new for less verbose usage

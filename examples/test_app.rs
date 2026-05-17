@@ -1,10 +1,12 @@
-use clone_cw_multi_test::{
-    wasm_emulation::channel::RemoteChannel, AppBuilder, BankKeeper, Executor, WasmKeeper,
-};
 use cosmwasm_std::Addr;
 use cosmwasm_std::StdResult;
 use cw20::AllAccountsResponse;
 use cw20::Cw20ExecuteMsg;
+use cw_multi_test::wasm_emulation::query::ContainsRemote;
+use cw_multi_test::FailingModule;
+use cw_multi_test::{
+    wasm_emulation::channel::RemoteChannel, AppBuilder, BankKeeper, Executor, WasmKeeper,
+};
 
 use cw20::Cw20QueryMsg;
 use cw_orch::daemon::networks::PHOENIX_1;
@@ -36,7 +38,7 @@ pub fn test() -> StdResult<()> {
         .with_wasm(wasm)
         .with_bank(bank)
         .with_remote(remote_channel)
-        .build(|_, _, _| {})?;
+        .build(|_, _, _| {});
 
     // Then we send a message to the blockchain through the app
     let sender = "terra17c6ts8grcfrgquhj3haclg44le8s7qkx6l2yx33acguxhpf000xqhnl3je";

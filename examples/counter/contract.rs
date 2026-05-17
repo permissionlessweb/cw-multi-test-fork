@@ -46,11 +46,11 @@ pub fn execute(
 }
 
 #[cfg_attr(feature = "export", entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Count {} => Ok(to_json_binary(&query::count(deps)?)?),
-        QueryMsg::CousinCount {} => Ok(to_json_binary(&query::cousin_count(deps)?)?),
-        QueryMsg::RawCousinCount {} => Ok(to_json_binary(&query::raw_cousin_count(deps)?)?),
+        QueryMsg::Count {} => to_json_binary(&query::count(deps)?),
+        QueryMsg::CousinCount {} => to_json_binary(&query::cousin_count(deps)?),
+        QueryMsg::RawCousinCount {} => to_json_binary(&query::raw_cousin_count(deps)?),
     }
 }
 
