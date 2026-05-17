@@ -645,7 +645,7 @@ impl Module for StakeKeeper {
     type QueryT = StakingQuery;
     type SudoT = StakingSudo;
 
-    fn execute<ExecC, QueryC: CustomQuery>(
+    fn execute<ExecC: CustomMsg, QueryC: CustomQuery>(
         &self,
         api: &dyn Api,
         storage: &mut dyn Storage,
@@ -956,7 +956,7 @@ impl Module for DistributionKeeper {
     type QueryT = Empty;
     type SudoT = Empty;
 
-    fn execute<ExecC, QueryC: CustomQuery>(
+    fn execute<ExecC: CustomMsg, QueryC: CustomQuery>(
         &self,
         api: &dyn Api,
         storage: &mut dyn Storage,

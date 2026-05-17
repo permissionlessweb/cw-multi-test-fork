@@ -103,7 +103,7 @@ impl<
 }
 
 /// No-op application initialization function.
-pub fn no_init<ApiT: ?Sized, BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>(
+pub fn no_init<ApiT, BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>(
     router: &mut Router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>,
     api: &ApiT,
     storage: &mut dyn Storage,
@@ -159,7 +159,7 @@ where
 impl<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> Querier
     for App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
 where
-    CustomT::ExecT: Clone + Debug + PartialEq + DeserializeOwned + 'static,
+    CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
     WasmT: Wasm<CustomT::ExecT, CustomT::QueryT>,
     BankT: Bank,
@@ -181,7 +181,7 @@ where
 impl<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> Executor<CustomT::ExecT>
     for App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
 where
-    CustomT::ExecT: Clone + Debug + PartialEq + DeserializeOwned + CustomMsg + 'static,
+    CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
     WasmT: Wasm<CustomT::ExecT, CustomT::QueryT>,
     BankT: Bank,
@@ -277,11 +277,9 @@ where
     /// Registers contract code (like uploading wasm bytecode on a chain),
     /// so it can later be used to instantiate a contract.
     pub fn store_code(&mut self, code: Box<dyn Contract<CustomT::ExecT, CustomT::QueryT>>) -> u64 {
-        self.init_modules(|router, _, _| {
-            router
-                .wasm
-                .store_code(Addr::unchecked("code-creator"), code)
-        })
+        self.router
+            .wasm
+            .store_code(MockApi::default().addr_make("creator"), code)
     }
     /// Registers contract code (like [store_code](Self::store_code)),
     /// but takes the address of the code creator as an additional argument.
@@ -290,7 +288,7 @@ where
         creator: Addr,
         code: Box<dyn Contract<CustomT::ExecT, CustomT::QueryT>>,
     ) -> u64 {
-        self.init_modules(|router, _, _| router.wasm.store_code(creator, code))
+        self.router.wasm.store_code(creator, code)
     }
     /// Registers contract code (like uploading wasm bytecode on a chain),
     /// so it can later be used to instantiate a contract.
@@ -322,7 +320,7 @@ where
 
     /// Returns `ContractData` for the contract with specified address.
     pub fn contract_data(&self, address: &Addr) -> StdResult<ContractData> {
-        self.read_module(|router, _, storage| router.wasm.contract_data(storage, address))
+        self.router.wasm.contract_data(&self.storage, address)
     }
 
     /// Returns a raw state dump of all key-values held by a contract with specified address.
@@ -334,7 +332,7 @@ where
 impl<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
     App<BankT, ApiT, StorageT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
 where
-    CustomT::ExecT: Debug + PartialEq + Clone + DeserializeOwned + CustomMsg + 'static,
+    CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
     WasmT: Wasm<CustomT::ExecT, CustomT::QueryT>,
     BankT: Bank,
@@ -487,7 +485,7 @@ pub struct Router<Bank, Custom, Wasm, Staking, Distr, Ibc, Gov> {
 impl<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
     Router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
 where
-    CustomT::ExecT: Clone + Debug + PartialEq + DeserializeOwned + 'static,
+    CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
     CustomT: Module,
     WasmT: Wasm<CustomT::ExecT, CustomT::QueryT>,
@@ -540,7 +538,7 @@ impl From<StakingSudo> for SudoMsg {
 }
 
 pub trait CosmosRouter {
-    type ExecC;
+    type ExecC: CustomMsg;
     type QueryC: CustomQuery;
 
     fn execute(
@@ -574,7 +572,7 @@ pub trait CosmosRouter {
 impl<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT> CosmosRouter
     for Router<BankT, CustomT, WasmT, StakingT, DistrT, IbcT, GovT>
 where
-    CustomT::ExecT: Debug + Clone + PartialEq + DeserializeOwned + 'static,
+    CustomT::ExecT: CustomMsg + DeserializeOwned + 'static,
     CustomT::QueryT: CustomQuery + DeserializeOwned + 'static,
     CustomT: Module,
     WasmT: Wasm<CustomT::ExecT, CustomT::QueryT>,
@@ -675,6 +673,7 @@ impl<ExecC, QueryC> MockRouter<ExecC, QueryC> {
 
 impl<ExecC, QueryC> CosmosRouter for MockRouter<ExecC, QueryC>
 where
+    ExecC: CustomMsg,
     QueryC: CustomQuery,
 {
     type ExecC = ExecC;
@@ -739,9 +738,9 @@ impl<'a, ExecC, QueryC> RouterQuerier<'a, ExecC, QueryC> {
     }
 }
 
-impl<'a, ExecC, QueryC> Querier for RouterQuerier<'a, ExecC, QueryC>
+impl<ExecC, QueryC> Querier for RouterQuerier<'_, ExecC, QueryC>
 where
-    ExecC: Clone + Debug + PartialEq + DeserializeOwned + 'static,
+    ExecC: CustomMsg + DeserializeOwned + 'static,
     QueryC: CustomQuery + DeserializeOwned + 'static,
 {
     fn raw_query(&self, bin_request: &[u8]) -> QuerierResult {
