@@ -2,7 +2,6 @@ use crate::wasm_emulation::query::gas::{GAS_COST_CANONICALIZE, GAS_COST_HUMANIZE
 use bech32::{Bech32, Hrp};
 use cosmwasm_std::Addr;
 use cosmwasm_vm::{BackendApi, BackendError, GasInfo};
-use sha2::{Digest, Sha256};
 use std::ops::AddAssign;
 
 const SHORT_CANON_LEN: usize = 20;

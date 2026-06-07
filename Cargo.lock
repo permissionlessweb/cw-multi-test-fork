@@ -1246,6 +1246,7 @@ dependencies = [
  "anyhow",
  "cosmrs",
  "cosmwasm-std",
+ "cw-orch-circuit-derive",
  "cw-orch-contract-derive",
  "cw-orch-core",
  "cw-orch-daemon",
@@ -1260,6 +1261,15 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "cw-orch-circuit-derive"
+version = "0.21.1"
+dependencies = [
+ "convert_case",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1287,6 +1297,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 1.0.69",
+ "zk-cosmwasm",
 ]
 
 [[package]]
