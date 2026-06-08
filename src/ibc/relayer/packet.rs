@@ -217,6 +217,7 @@ where
             },
         })
     } else {
+        #[allow(unused)]
         Ok(RelayPacketResult {
             receive_tx: receive_response,
             result: unimplemented!("No ack is not handled in cw-multi-test right now"),
