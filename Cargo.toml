@@ -29,10 +29,10 @@ cosmwasm_3_0 = ["cosmwasm_2_2", "cosmwasm-std/cosmwasm_3_0"]
 
 [dependencies]
 bech32 = "0.11.0"
-cosmwasm-schema = { path = "../cosmwasm/packages/schema" }
-cosmwasm-std = { path = "../cosmwasm/packages/std" }
-cw-storage-plus = { path = "../cw-storage-plus" }
-cw-utils = { path = "../cw-minus/packages/cw-utils" }
+cosmwasm-schema = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cosmwasm", branch = "v3.1.0-zk.0", package = "cosmwasm-schema" }
+cosmwasm-std = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cosmwasm", branch = "v3.1.0-zk.0", package = "cosmwasm-std" }
+cw-storage-plus = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cw-storage-plus", branch = "v3.1.0-zk.0" }
+cw-utils = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cw-minus", branch = "main", package = "cw-utils" }
 cw20-ics20 = { path = "../cw-plus/contracts/cw20-ics20" }
 itertools = "0.14.0"
 prost = "0.14.1"
