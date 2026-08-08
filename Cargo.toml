@@ -33,7 +33,7 @@ cosmwasm-schema = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstr
 cosmwasm-std = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cosmwasm", branch = "v3.1.0-zk.0", package = "cosmwasm-std" }
 cw-storage-plus = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cw-storage-plus", branch = "v3.1.0-zk.0" }
 cw-utils = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cw-minus", branch = "main", package = "cw-utils" }
-cw20-ics20 = { path = "../cw-plus/contracts/cw20-ics20" }
+cw20-ics20 = { git = "ssh://returniflost@groot-wan/Users/returniflost/abstract/terp-core/crates/cw-plus", branch = "v3.1.0-zk.0", package = "cw20-ics20" }
 itertools = "0.14.0"
 prost = "0.14.1"
 schemars = "0.8"
