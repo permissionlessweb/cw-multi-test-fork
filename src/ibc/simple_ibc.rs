@@ -1040,7 +1040,7 @@ impl IbcSimpleModule {
 
         // 2. Send an ICS20 Packet to the remote chain
         let packet_formed = Ics20Packet {
-            amount: amount.amount,
+            amount: amount.amount.to_string().parse().expect("uint256"),
             denom,
             receiver: to_address,
             sender: sender.to_string(),

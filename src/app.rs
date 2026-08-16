@@ -22,7 +22,7 @@ use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
     from_json, to_json_binary, Addr, Api, Binary, BlockInfo, ContractResult, CosmosMsg, CustomMsg,
     CustomQuery, Empty, IbcSourceCallbackMsg, Querier, QuerierResult, QuerierWrapper, QueryRequest,
-    Record, StdResult, Storage, SystemError, SystemResult,
+    Record, StdError, StdResult, Storage, SystemError, SystemResult,
 };
 use cw20_ics20::ibc::Ics20Packet;
 use serde::{de::DeserializeOwned, Serialize};
@@ -757,7 +757,14 @@ where
                 .stargate
                 .query_stargate(api, storage, &querier, block, path, data),
             #[cfg(feature = "cosmwasm_2_0")]
-            QueryRequest::Grpc(req) => self.stargate.query_grpc(api, storage, &querier, block, req),
+            QueryRequest::Grpc(req) => {
+                if is_bank_all_balances_path(&req.path) {
+                    let address = decode_all_balances_address(req.data.as_slice())?;
+                    let coins = self.bank.query_all_balances(api, storage, &address)?;
+                    return Ok(encode_all_balances_response(&coins));
+                }
+                self.stargate.query_grpc(api, storage, &querier, block, req)
+            }
             _ => unimplemented!(),
         }
     }
@@ -1031,5 +1038,119 @@ where
             .query(self.api, self.storage, self.block_info, request)
             .into();
         SystemResult::Ok(contract_result)
+    }
+}
+
+
+
+fn is_bank_all_balances_path(path: &str) -> bool {
+    path == "/cosmos.bank.v1beta1.Query/AllBalances"
+        || path == "cosmos.bank.v1beta1.Query/AllBalances"
+}
+
+/// Minimal protobuf (field 1 string) decoder for QueryAllBalancesRequest.address.
+fn decode_all_balances_address(raw: &[u8]) -> StdResult<String> {
+    let mut i = 0;
+    while i < raw.len() {
+        let (key, n) = read_varint(raw, i)?;
+        i += n;
+        let field = (key >> 3) as u32;
+        let wire = (key & 7) as u8;
+        if wire != 2 {
+            skip_wire(raw, &mut i, wire)?;
+            continue;
+        }
+        let (len, n) = read_varint(raw, i)?;
+        i += n;
+        let end = i + len as usize;
+        if end > raw.len() {
+            return Err(StdError::msg("AllBalances request truncated"));
+        }
+        if field == 1 {
+            return String::from_utf8(raw[i..end].to_vec())
+                .map_err(|_| StdError::msg("AllBalances address not utf8"));
+        }
+        i = end;
+    }
+    Err(StdError::msg("AllBalances request missing address"))
+}
+
+fn encode_all_balances_response(coins: &[cosmwasm_std::Coin]) -> Binary {
+    let mut out = Vec::new();
+    for coin in coins {
+        let mut msg = Vec::new();
+        append_string(&mut msg, 1, &coin.denom);
+        append_string(&mut msg, 2, &coin.amount.to_string());
+        append_bytes(&mut out, 1, &msg);
+    }
+    Binary::from(out)
+}
+
+fn append_string(buf: &mut Vec<u8>, field: u32, s: &str) {
+    append_bytes(buf, field, s.as_bytes());
+}
+
+fn append_bytes(buf: &mut Vec<u8>, field: u32, data: &[u8]) {
+    write_varint(buf, ((field as u64) << 3) | 2);
+    write_varint(buf, data.len() as u64);
+    buf.extend_from_slice(data);
+}
+
+fn write_varint(buf: &mut Vec<u8>, mut v: u64) {
+    loop {
+        let mut b = (v & 0x7f) as u8;
+        v >>= 7;
+        if v != 0 {
+            b |= 0x80;
+        }
+        buf.push(b);
+        if v == 0 {
+            break;
+        }
+    }
+}
+
+fn read_varint(data: &[u8], mut i: usize) -> StdResult<(u64, usize)> {
+    let start = i;
+    let mut out = 0u64;
+    let mut shift = 0;
+    loop {
+        if i >= data.len() {
+            return Err(StdError::msg("truncated varint"));
+        }
+        let b = data[i];
+        i += 1;
+        out |= ((b & 0x7f) as u64) << shift;
+        if b & 0x80 == 0 {
+            return Ok((out, i - start));
+        }
+        shift += 7;
+        if shift > 63 {
+            return Err(StdError::msg("varint overflow"));
+        }
+    }
+}
+
+fn skip_wire(data: &[u8], i: &mut usize, wire: u8) -> StdResult<()> {
+    match wire {
+        0 => {
+            let (_, n) = read_varint(data, *i)?;
+            *i += n;
+            Ok(())
+        }
+        1 => {
+            *i += 8;
+            Ok(())
+        }
+        2 => {
+            let (len, n) = read_varint(data, *i)?;
+            *i += n + len as usize;
+            Ok(())
+        }
+        5 => {
+            *i += 4;
+            Ok(())
+        }
+        _ => Err(StdError::msg("unsupported proto wire type")),
     }
 }

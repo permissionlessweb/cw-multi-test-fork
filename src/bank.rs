@@ -14,7 +14,7 @@ use crate::{
     App, Distribution, Gov, Ibc, Staking, Stargate, SudoMsg, Wasm, WasmSudo,
 };
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{
+use cosmwasm_std::{StdError, 
     coin, to_json_binary, wasm_execute, Addr, Api, BalanceResponse, BankMsg, BankQuery, Binary,
     BlockInfo, Coin, CustomMsg, CustomQuery, DenomMetadata, Event, Querier, StdAck, StdResult,
     Storage, Uint256,
@@ -69,7 +69,19 @@ pub enum BankSudo {
 /// In the test environment, it is essential for testing financial transactions,
 /// like transfers and balance checks, within your smart contracts.
 /// This trait implements all of these functionalities.
-pub trait Bank: Module<ExecT = BankMsg, QueryT = BankQuery, SudoT = BankSudo> {}
+pub trait Bank: Module<ExecT = BankMsg, QueryT = BankQuery, SudoT = BankSudo> {
+    /// All denoms held by `address`. Used by `QueryRequest::Grpc` AllBalances.
+    fn query_all_balances(
+        &self,
+        _api: &dyn Api,
+        _storage: &dyn Storage,
+        _address: &str,
+    ) -> StdResult<Vec<Coin>> {
+        Err(StdError::msg(
+            "bank query_all_balances not implemented",
+        ))
+    }
+}
 
 /// A structure representing a default bank keeper.
 ///
@@ -210,7 +222,17 @@ fn coins_to_string(coins: &[Coin]) -> String {
         .join(",")
 }
 
-impl Bank for BankKeeper {}
+impl Bank for BankKeeper {
+    fn query_all_balances(
+        &self,
+        api: &dyn Api,
+        storage: &dyn Storage,
+        address: &str,
+    ) -> StdResult<Vec<Coin>> {
+        let address = api.addr_validate(address)?;
+        self.get_all_balances(storage, &address)
+    }
+}
 
 impl Module for BankKeeper {
     type ExecT = BankMsg;
@@ -347,7 +369,7 @@ impl Module for BankKeeper {
 
         let funds = if let Some(locked_amount) = locked_amount {
             assert!(
-                locked_amount.amount >= packet.amount,
+                locked_amount.amount >= packet.amount.to_string().parse().unwrap(),
                 "The ibc locked amount is lower than the packet amount"
             );
             // We send tokens from the IBC_LOCK_MODULE
@@ -470,7 +492,7 @@ impl Module for BankKeeper {
 
         if let Some(locked_amount) = locked_amount {
             assert!(
-                locked_amount.amount >= packet.amount,
+                locked_amount.amount >= packet.amount.to_string().parse().unwrap(),
                 "The ibc locked amount is lower than the packet amount"
             );
             // We send tokens from the IBC_LOCK_MODULE
