@@ -29,11 +29,11 @@ cosmwasm_3_0 = ["cosmwasm_2_2", "cosmwasm-std/cosmwasm_3_0"]
 
 [dependencies]
 bech32 = "0.11.0"
-cosmwasm-schema = { path = "../cosmwasm/packages/schema", package = "cosmwasm-schema" }
-cosmwasm-std = { path = "../cosmwasm/packages/std", package = "cosmwasm-std" }
-cw-storage-plus = { path = "../cw-storage-plus" }
-cw-utils = { path = "../cw-minus/packages/cw-utils", package = "cw-utils" }
-cw20-ics20 = { path = "../cw-plus/contracts/cw20-ics20", package = "cw20-ics20" }
+cosmwasm-schema = { git = "https://github.com/permissionlessweb/cosmwasm", rev = "e20646e2d9a9c4f93e993eb0656afa795f6e387a", package = "cosmwasm-schema" }
+cosmwasm-std = { git = "https://github.com/permissionlessweb/cosmwasm", rev = "e20646e2d9a9c4f93e993eb0656afa795f6e387a", package = "cosmwasm-std" }
+cw-storage-plus = { git = "https://github.com/permissionlessweb/cw-storage-plus", rev = "cf066f8ca57cc30a7cf8f50fca9cf6e18291d71a" }
+cw-utils = { git = "https://github.com/permissionlessweb/cw-minus", rev = "c5c680ddc3d896cc746618d7ad9b93e0f8271461", package = "cw-utils" }
+cw20-ics20 = { git = "https://github.com/permissionlessweb/cw-plus", rev = "f7ef1aaafd368d811f268cf47360a7d808e74102", package = "cw20-ics20" }
 itertools = "0.14.0"
 prost = "0.14.1"
 schemars = "0.8"
@@ -48,6 +48,19 @@ tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 
 [dev-dependencies]
 cw-multi-test = { package = "abstract-cw-multi-test", path = "." }
+
+[patch.'https://github.com/permissionlessweb/cosmwasm']
+cosmwasm-schema = { path = "../cosmwasm/packages/schema", package = "cosmwasm-schema" }
+cosmwasm-std = { path = "../cosmwasm/packages/std", package = "cosmwasm-std" }
+
+[patch.'https://github.com/permissionlessweb/cw-storage-plus']
+cw-storage-plus = { path = "../cw-storage-plus" }
+
+[patch.'https://github.com/permissionlessweb/cw-minus']
+cw-utils = { path = "../cw-minus/packages/cw-utils", package = "cw-utils" }
+
+[patch.'https://github.com/permissionlessweb/cw-plus']
+cw20-ics20 = { path = "../cw-plus/contracts/cw20-ics20", package = "cw20-ics20" }
 hex = "0.4.3"
 hex-literal = "0.4.1"
 once_cell = "1.20.2"
