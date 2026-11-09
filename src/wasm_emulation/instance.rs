@@ -1,11 +1,10 @@
-use cosmwasm_vm::internals::compile;
-use cosmwasm_vm::internals::{instance_from_module, make_compiling_engine};
+use cosmwasm_vm::internals::compile_module;
+use cosmwasm_vm::internals::instance_from_module;
 use cosmwasm_vm::{Backend, BackendApi, Instance, InstanceOptions, Querier, Storage, VmResult};
 use wasmer::{Engine, Module, Store};
 
 pub fn create_module(code: &[u8]) -> VmResult<(Engine, Module)> {
-    let engine = make_compiling_engine(None);
-    let module = compile(&engine, code)?;
+    let (module, engine) = compile_module(code, None)?;
     Ok((engine, module))
 }
 
