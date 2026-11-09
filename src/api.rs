@@ -143,6 +143,103 @@ impl<T: bech32::Checksum + 'static> Api for MockApiBech<T> {
             .ed25519_batch_verify(messages, signatures, public_keys)
     }
 
+    fn proof_instance_verify(
+        &self,
+        zkid: u64,
+        proof: &[u8],
+        i: &[u8],
+    ) -> Result<bool, VerificationError> {
+        self.api.proof_instance_verify(zkid, proof, i)
+    }
+
+    #[cfg(feature = "hash-blake")]
+    fn blake2b_256(&self, input: &[u8]) -> [u8; 32] {
+        self.api.blake2b_256(input)
+    }
+
+    #[cfg(feature = "hash-blake")]
+    fn blake3_256(&self, input: &[u8]) -> [u8; 32] {
+        self.api.blake3_256(input)
+    }
+
+    #[cfg(feature = "hash-poseidon")]
+    fn poseidon_hash_pallas(&self, inputs: &[u8]) -> Result<[u8; 32], VerificationError> {
+        self.api.poseidon_hash_pallas(inputs)
+    }
+
+    #[cfg(feature = "hash-poseidon")]
+    fn poseidon_hash_vesta(&self, inputs: &[u8]) -> Result<[u8; 32], VerificationError> {
+        self.api.poseidon_hash_vesta(inputs)
+    }
+
+    #[cfg(feature = "hash-poseidon")]
+    fn poseidon377_hash(
+        &self,
+        domain: &[u8],
+        message: &[u8],
+    ) -> Result<[u8; 32], VerificationError> {
+        self.api.poseidon377_hash(domain, message)
+    }
+
+    #[cfg(feature = "redpallas")]
+    fn redpallas_spendauth_verify(
+        &self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, VerificationError> {
+        self.api
+            .redpallas_spendauth_verify(message, signature, public_key)
+    }
+
+    #[cfg(feature = "redpallas")]
+    fn redpallas_binding_verify(
+        &self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, VerificationError> {
+        self.api
+            .redpallas_binding_verify(message, signature, public_key)
+    }
+
+    #[cfg(feature = "redpallas")]
+    fn redjubjub_spendauth_verify(
+        &self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, VerificationError> {
+        self.api
+            .redjubjub_spendauth_verify(message, signature, public_key)
+    }
+
+    #[cfg(feature = "redpallas")]
+    fn redjubjub_binding_verify(
+        &self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, VerificationError> {
+        self.api
+            .redjubjub_binding_verify(message, signature, public_key)
+    }
+
+    #[cfg(feature = "bn254")]
+    fn bn254_add(&self, input: &[u8]) -> Result<[u8; 64], VerificationError> {
+        self.api.bn254_add(input)
+    }
+
+    #[cfg(feature = "bn254")]
+    fn bn254_scalar_mul(&self, input: &[u8]) -> Result<[u8; 64], VerificationError> {
+        self.api.bn254_scalar_mul(input)
+    }
+
+    #[cfg(feature = "bn254")]
+    fn bn254_pairing_equality(&self, input: &[u8]) -> Result<bool, VerificationError> {
+        self.api.bn254_pairing_equality(input)
+    }
+
     fn debug(&self, message: &str) {
         self.api.debug(message)
     }
